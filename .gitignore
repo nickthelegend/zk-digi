@@ -2,6 +2,7 @@
 
 # Node.js
 node_modules/
+snarkjs-algorand/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
