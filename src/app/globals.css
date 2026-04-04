@@ -1,26 +1,77 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #0B0B12;
+  --foreground: #eae7f1;
+  --primary: #ba9eff;
+  --primary-dim: #8455ef;
+  --secondary: #c180ff;
+  --secondary-dim: #9c48ea;
+  --tertiary: #c890ff;
+  --tertiary-dim: #be83fa;
+  --surface: #0e0e15;
+  --surface-container: #191922;
+  --surface-container-low: #13131b;
+  --surface-container-high: #1f1f28;
+  --surface-container-highest: #25252f;
+  --on-surface: #eae7f1;
+  --on-surface-variant: #acaab4;
+  --outline: #76747e;
+  --outline-variant: #484750;
+  --glass: rgba(37, 37, 47, 0.4);
+  --glass-hover: rgba(43, 43, 54, 0.6);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --color-primary: var(--primary);
+  --color-primary-dim: var(--primary-dim);
+  --color-secondary: var(--secondary);
+  --color-secondary-dim: var(--secondary-dim);
+  --color-tertiary: var(--tertiary);
+  --color-tertiary-dim: var(--tertiary-dim);
+  --color-surface: var(--surface);
+  --color-surface-container: var(--surface-container);
+  --color-surface-container-low: var(--surface-container-low);
+  --color-surface-container-high: var(--surface-container-high);
+  --color-surface-container-highest: var(--surface-container-highest);
+  --color-on-surface: var(--on-surface);
+  --color-on-surface-variant: var(--on-surface-variant);
+  --color-outline: var(--outline);
+  --color-outline-variant: var(--outline-variant);
+  
+  --font-headline: "Space Grotesk", sans-serif;
+  --font-body: "Inter", sans-serif;
+  --font-label: "Space Grotesk", sans-serif;
+  --font-sans: "Inter", sans-serif;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-body);
+  overflow-x: hidden;
 }
+
+@layer utilities {
+  .glass-card {
+    background: var(--glass);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  }
+  .glass-card:hover {
+    background: var(--glass-hover);
+    box-shadow: 0 0 40px rgba(139, 92, 246, 0.15);
+    transform: translateY(-4px);
+  }
+  .secure-pulse {
+    animation: pulse-opacity 4s ease-in-out infinite;
+  }
+  @keyframes pulse-opacity {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.6; }
+  }
+}
+
