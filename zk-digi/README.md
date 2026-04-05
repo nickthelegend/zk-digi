@@ -1,36 +1,91 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# ZK DigiLocker — Privacy-First Identity on Algorand
 
-## Getting Started
+## What Is This?
+ZK DigiLocker is a decentralized identity and electronic locker platform built on Algorand. It utilizes Zero-Knowledge Proofs (ZKP) to enable users to selectively disclose their identity attributes (like age, KYC status, student enrollment, and nationality) without revealing any underlying sensitive data or document copies.
 
-First, run the development server:
+## How It Works
+The platform separates the **Proof of Identity** from the **Data Storage**.
+1. **User Side:** Holder generates a ZKP locally in their browser using `snarkjs` and the `zk-digi` SDK.
+2. **On-Chain:** The proof is submitted to an Algorand smart contract verifier.
+3. **Verifier App:** The verifier (implemented in TEALScript via `snarkjs-algorand`) cryptographically confirms the proof is valid against a registered public key from a trusted source.
+4. **Consent:** If valid, the verifier app issues a "Consent Token" that external applications can use to satisfy requirements (e.g., "Must be 18+").
 
-```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+### Architecture Diagram
+```
+[ Holder / Browser ]
+  |-- (1) Generate Proof (snarkjs)
+  |-- (2) Encode (zk-digi-sdk)
+  v
+[ Algorand Smart Contract (Verifier) ]
+  |-- (3) OpUp for Opcode Budget
+  |-- (4) pairingCheck(G1, G2)
+  |-- (5) Boolean (Pass/Fail)
+  v
+[ Verifier App / DApp ]
+  |-- (6) Satisfy Business Logic
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Proof Types Supported
+- **Age (>18):** Proves minimum age without revealing DOB.
+- **KYC Status:** Proves a valid KYC process was completed.
+- **Enrollment:** Proves student status for a given academic year.
+- **Residency:** Proves country of residence for regulatory compliance.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Quick Start
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+### Prerequisites
+- Node.js v18+
+- [AlgoKit](https://github.com/algorandfoundation/algokit-cli)
+- [Circom](https://docs.circom.io/getting-started/installation/)
+- [snarkjs](https://github.com/iden3/snarkjs)
 
-## Learn More
+### Install
+```bash
+cd zk-digi
+npm install
+```
 
-To learn more about Next.js, take a look at the following resources:
+### Run LocalNet
+```bash
+algokit localnet start
+```
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+### Generate a Proof (Example with Age Circuit)
+```bash
+# Setup circuit (one-time)
+snarkjs groth16 setup age_check.r1cs pot12_final.ptau age_check_0000.zkey
+# Generate proof
+snarkjs groth16 fullProve input.json age_check_js/age_check.wasm age_check_final.zkey proof.json public.json
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Deploy Verifier
+```typescript
+import { Groth16Bls12381AppVerifier } from "snarkjs-algorand";
+const verifier = new Groth16Bls12381AppVerifier({
+  algorand,
+  zKey: "age_check_final.zkey",
+  wasmProver: "age_check.wasm"
+});
+await verifier.deploy({ defaultSender });
+```
 
-## Deploy on Vercel
+### Verify Proof On-Chain
+```typescript
+const result = await verifier.callVerify({ birthYear: 2000, currentYear: 2024 });
+console.log("Verified:", result);
+```
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Project Structure
+- `circuits/`: `.circom` source files for ZK circuits.
+- `contracts/`: TEALScript smart contracts for verification and registry.
+- `sdk/`: Client-side library for proof generation and encoding.
+- `tests/`: Integration tests using AlgoKit and LocalNet.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## ZK Proof Flow
+The project relies on the **Groth16 (BLS12-381)** proof system for its optimal balance of proof size and verification speed on the Algorand blockchain.
+
+## Contributing
+We welcome contributions to circuit design and contract optimization! Please see our [ROADMAP.md](ROADMAP.md) for current focus areas.
+
+## License
+MIT
