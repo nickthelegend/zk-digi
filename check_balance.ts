@@ -8,7 +8,8 @@ async function check() {
     try {
         const info = await algodClient.accountInformation(account.addr).do();
         console.log(`Address: ${account.addr}`);
-        console.log(`Balance: ${info.amount / 1_000_000} ALGO`);
+        const balance = Number(info.amount) / 1_000_000;
+        console.log(`Balance: ${balance} ALGO`);
     } catch (e) {
         console.error(e);
     }

@@ -1,0 +1,7 @@
+1,1,0,main.hash
+2,2,0,main.secret
+3,3,0,main.temp1
+4,5,0,main.temp2
+5,2,1,main.isZero.in
+6,6,1,main.isZero.out
+7,4,1,main.isZero.inv
