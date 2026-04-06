@@ -1,6 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { WalletButton } from '@txnlab/use-wallet-ui-react'
 
 export const Navbar = () => {
   const pathname = usePathname();
@@ -88,9 +89,9 @@ export const Navbar = () => {
             <span className="material-symbols-outlined group-hover:scale-110 transition-transform">notifications</span>
             <span className="absolute top-2 right-2 w-2 h-2 bg-primary rounded-full border-2 border-slate-950"></span>
           </button>
-          <button className="px-6 py-2.5 rounded-full bg-gradient-to-r from-primary-dim to-secondary-dim text-white font-body text-sm font-semibold hover:shadow-[0_0_20px_rgba(139,92,246,0.15)] transition-all duration-300">
-            Connect Wallet
-          </button>
+          <div className="wui-custom-trigger">
+            <WalletButton />
+          </div>
           <div className="w-10 h-10 rounded-full overflow-hidden bg-surface-container-high border border-outline-variant/20 group cursor-pointer">
             <img
               alt="User cryptographic identity avatar"
