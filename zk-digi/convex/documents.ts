@@ -16,8 +16,8 @@ export const uploadDocument = mutation({
       docType: args.docType,
       docName: args.docName,
       docHash: args.docHash,
-      fileSize: args.fileSize ?? null,
-      mimeType: args.mimeType ?? null,
+fileSize: args.fileSize ?? undefined,
+    mimeType: args.mimeType ?? undefined,
       uploadedAt: Date.now(),
       status: "stored",
     });

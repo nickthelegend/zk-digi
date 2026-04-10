@@ -68,8 +68,8 @@ export default function DocumentsPage() {
         docType: selectedType,
         docName: docName,
         docHash: hashHex,
-        fileSize: selectedFile?.size || null,
-        mimeType: selectedFile?.type || null,
+        fileSize: selectedFile?.size || undefined,
+        mimeType: selectedFile?.type || undefined,
       });
 
       await logActivityMutation({

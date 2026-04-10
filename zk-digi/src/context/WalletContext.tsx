@@ -20,7 +20,8 @@ const ALGOD_TOKEN = "";
 const ALGOD_PORT = 443;
 
 export function WalletContextProvider({ children }: { children: React.ReactNode }) {
-  const { activeAddress, isConnected, activeWallet } = useWallet();
+  const { activeAddress, activeWallet } = useWallet();
+  const isConnected = !!activeAddress;
   const connectWalletMutation = useMutation(api.wallets.connectWallet);
   const logActivityMutation = useMutation(api.activity.logActivity);
 
@@ -29,7 +30,7 @@ export function WalletContextProvider({ children }: { children: React.ReactNode 
   }, []);
 
   useEffect(() => {
-    if (activeWallet?.isConnected && activeAddress) {
+    if (isConnected && activeAddress) {
       connectWalletMutation({
         address: activeAddress,
         network: "testnet",
@@ -38,14 +39,14 @@ export function WalletContextProvider({ children }: { children: React.ReactNode 
       logActivityMutation({
         walletAddress: activeAddress,
         eventType: "wallet_connected",
-        description: `Connected to ${activeWallet?.metadata.name || "Algorand Wallet"}`,
+        description: `Connected to ${activeWallet?.metadata?.name || "Algorand Wallet"}`,
       });
     }
-  }, [activeWallet?.isConnected, activeAddress, activeWallet?.metadata.name]);
+  }, [isConnected, activeAddress, activeWallet?.metadata?.name]);
 
   const value = {
     address: activeAddress || null,
-    isConnected: !!activeWallet?.isConnected,
+    isConnected: isConnected,
     algodClient,
     activeWallet,
   };
