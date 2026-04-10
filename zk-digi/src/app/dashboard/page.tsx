@@ -2,8 +2,44 @@
 
 import React from "react";
 import { Navbar } from "@/components/Navbar";
+import { useZkWallet } from "@/context/WalletContext";
+import { useQuery } from "convex/react";
+import { api } from "../../../convex/_generated/api";
+import Link from "next/link";
 
-export default function Home() {
+export default function Dashboard() {
+  const { address, isConnected } = useZkWallet();
+  const stats = useQuery(api.dashboard.getDashboardStats, 
+    address ? { walletAddress: address } : "skip"
+  );
+
+  if (!isConnected) {
+    return (
+      <div className="bg-surface selection:bg-primary/30 min-h-screen">
+        <Navbar />
+        <main className="pt-32 pb-20 px-8 max-w-[1920px] mx-auto min-h-[80vh] flex flex-col items-center justify-center text-center space-y-8">
+          <div className="w-24 h-24 rounded-full bg-primary/10 flex items-center justify-center text-primary animate-pulse">
+            <span className="material-symbols-outlined text-5xl">account_balance_wallet</span>
+          </div>
+          <div className="space-y-4 max-w-md">
+            <h1 className="font-headline text-4xl font-bold">Connect Your Wallet</h1>
+            <p className="font-body text-on-surface-variant">
+              To access your private identity vault and manage your ZK proofs, please connect your Algorand wallet.
+            </p>
+          </div>
+          <div className="flex gap-4">
+            {/* The Navbar already has the button, but we can prompt the user */}
+            <p className="text-sm font-bold text-primary-dim uppercase tracking-widest">
+              Check the navbar to connect
+            </p>
+          </div>
+        </main>
+      </div>
+    );
+  }
+
+  const isLoading = stats === undefined;
+
   return (
     <div className="bg-surface selection:bg-primary/30 min-h-screen">
       <Navbar />
@@ -36,14 +72,11 @@ export default function Home() {
         {/* Bento Grid Layout */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* 1. Documents Count */}
-          <div className="glass-card p-8 rounded-3xl relative overflow-hidden group">
+          <Link href="/documents" className="glass-card p-8 rounded-3xl relative overflow-hidden group">
             <div className="absolute -right-4 -top-4 w-24 h-24 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-colors"></div>
             <div className="flex justify-between items-start mb-12">
               <div className="w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
+                <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
                   description
                 </span>
               </div>
@@ -52,30 +85,28 @@ export default function Home() {
               </span>
             </div>
             <div className="space-y-1">
-              <h3 className="font-headline text-5xl font-bold">5</h3>
-              <p className="font-body text-on-surface-variant text-sm font-medium">
-                Documents
-              </p>
+              <h3 className="font-headline text-5xl font-bold">
+                {isLoading ? "..." : stats.documentCount}
+              </h3>
+              <p className="font-body text-on-surface-variant text-sm font-medium">Documents</p>
             </div>
             <div className="mt-6 pt-6 border-t border-outline-variant/10 flex items-center gap-2">
-              <span className="text-[10px] uppercase font-bold text-primary tracking-widest">
-                Vault Storage
-              </span>
+              <span className="text-[10px] uppercase font-bold text-primary tracking-widest">Vault Storage</span>
               <div className="flex-1 h-1 bg-surface-container-high rounded-full overflow-hidden">
-                <div className="w-[20%] h-full bg-primary"></div>
+                <div 
+                  className="h-full bg-primary transition-all duration-1000" 
+                  style={{ width: `${Math.min((stats?.documentCount || 0) * 10, 100)}%` }}
+                ></div>
               </div>
             </div>
-          </div>
+          </Link>
 
           {/* 2. Active Consents */}
-          <div className="glass-card p-8 rounded-3xl relative overflow-hidden group">
+          <Link href="/consents" className="glass-card p-8 rounded-3xl relative overflow-hidden group">
             <div className="absolute -right-4 -top-4 w-24 h-24 bg-secondary/5 rounded-full blur-2xl group-hover:bg-secondary/10 transition-colors"></div>
             <div className="flex justify-between items-start mb-12">
               <div className="w-12 h-12 rounded-2xl bg-secondary/10 flex items-center justify-center text-secondary">
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
+                <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
                   verified_user
                 </span>
               </div>
@@ -84,29 +115,22 @@ export default function Home() {
               </span>
             </div>
             <div className="space-y-1">
-              <h3 className="font-headline text-5xl font-bold">3</h3>
-              <p className="font-body text-on-surface-variant text-sm font-medium">
-                Active Consents
-              </p>
+              <h3 className="font-headline text-5xl font-bold">
+                {isLoading ? "..." : stats.activeConsents}
+              </h3>
+              <p className="font-body text-on-surface-variant text-sm font-medium">Active Consents</p>
             </div>
-            <div className="mt-6 pt-6 border-t border-outline-variant/10">
-              <div className="flex -space-x-2">
-                <div className="w-6 h-6 rounded-full border-2 border-surface bg-surface-container-high"></div>
-                <div className="w-6 h-6 rounded-full border-2 border-surface bg-surface-container-high"></div>
-                <div className="w-6 h-6 rounded-full border-2 border-surface bg-surface-container-high"></div>
-              </div>
+            <div className="mt-6 pt-6 border-t border-outline-variant/10 text-[10px] text-outline tracking-widest uppercase font-bold">
+              Shared Metadata
             </div>
-          </div>
+          </Link>
 
           {/* 3. Generated Proofs */}
-          <div className="glass-card p-8 rounded-3xl relative overflow-hidden group">
+          <Link href="/proofs" className="glass-card p-8 rounded-3xl relative overflow-hidden group">
             <div className="absolute -right-4 -top-4 w-24 h-24 bg-tertiary/5 rounded-full blur-2xl group-hover:bg-tertiary/10 transition-colors"></div>
             <div className="flex justify-between items-start mb-12">
               <div className="w-12 h-12 rounded-2xl bg-tertiary/10 flex items-center justify-center text-tertiary">
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
+                <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
                   enhanced_encryption
                 </span>
               </div>
@@ -115,46 +139,33 @@ export default function Home() {
               </span>
             </div>
             <div className="space-y-1">
-              <h3 className="font-headline text-5xl font-bold">7</h3>
-              <p className="font-body text-on-surface-variant text-sm font-medium">
-                Generated Proofs
-              </p>
+              <h3 className="font-headline text-5xl font-bold">
+                {isLoading ? "..." : stats.proofCount}
+              </h3>
+              <p className="font-body text-on-surface-variant text-sm font-medium">Generated Proofs</p>
             </div>
             <div className="mt-6 pt-6 border-t border-outline-variant/10 text-[10px] text-outline tracking-widest uppercase font-bold flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-green-500 secure-pulse"></span>{" "}
-              Valid & Active
+              <span className={`w-1.5 h-1.5 rounded-full ${stats?.verifiedProofs ? "bg-green-500 secure-pulse" : "bg-outline"}`}></span>{" "}
+              {stats?.verifiedProofs || 0} Verified
             </div>
-          </div>
+          </Link>
 
           {/* 4. Connected Apps */}
-          <div className="glass-card p-8 rounded-3xl relative overflow-hidden group">
+          <div className="glass-card p-8 rounded-3xl relative overflow-hidden group cursor-default">
             <div className="absolute -right-4 -top-4 w-24 h-24 bg-primary-dim/5 rounded-full blur-2xl group-hover:bg-primary-dim/10 transition-colors"></div>
             <div className="flex justify-between items-start mb-12">
               <div className="w-12 h-12 rounded-2xl bg-primary-dim/10 flex items-center justify-center text-primary-dim">
-                <span
-                  className="material-symbols-outlined"
-                  style={{ fontVariationSettings: "'FILL' 1" }}
-                >
+                <span className="material-symbols-outlined" style={{ fontVariationSettings: "'FILL' 1" }}>
                   grid_view
                 </span>
               </div>
-              <span className="material-symbols-outlined text-outline-variant group-hover:text-primary-dim transition-colors">
-                arrow_outward
-              </span>
             </div>
             <div className="space-y-1">
-              <h3 className="font-headline text-5xl font-bold">2</h3>
-              <p className="font-body text-on-surface-variant text-sm font-medium">
-                Connected Apps
-              </p>
+              <h3 className="font-headline text-5xl font-bold">0</h3>
+              <p className="font-body text-on-surface-variant text-sm font-medium">Apps Linked</p>
             </div>
-            <div className="mt-6 pt-6 border-t border-outline-variant/10 flex items-center justify-between">
-              <span className="text-[10px] text-outline font-bold uppercase tracking-widest">
-                Active Links
-              </span>
-              <span className="material-symbols-outlined text-primary-dim text-lg">
-                link
-              </span>
+            <div className="mt-6 pt-6 border-t border-outline-variant/10 text-[10px] text-outline font-bold uppercase tracking-widest">
+              Ecosystem Status: Beta
             </div>
           </div>
 
@@ -177,19 +188,19 @@ export default function Home() {
                 it, without ever revealing your underlying identity.
               </p>
               <div className="flex gap-4 pt-4">
-                <button className="px-8 py-3 rounded-full bg-primary text-black font-bold text-sm hover:brightness-110 transition-all">
+                <Link href="/proofs" className="px-8 py-3 rounded-full bg-primary text-black font-bold text-sm hover:brightness-110 transition-all text-center">
                   Generate Proof
-                </button>
-                <button className="px-8 py-3 rounded-full bg-surface-container-highest text-on-surface font-bold text-sm border border-outline-variant/20 hover:bg-surface-bright transition-all">
-                  Vault Settings
-                </button>
+                </Link>
+                <Link href="/documents" className="px-8 py-3 rounded-full bg-surface-container-highest text-on-surface font-bold text-sm border border-outline-variant/20 hover:bg-surface-bright transition-all text-center">
+                  My Documents
+                </Link>
               </div>
             </div>
             <div className="w-full md:w-[400px] h-[300px] rounded-2xl overflow-hidden relative group shadow-2xl">
               <img
                 alt="Abstract ZK visualization"
                 className="w-full h-full object-cover grayscale opacity-50 group-hover:grayscale-0 group-hover:opacity-80 transition-all duration-700"
-                src="https://lh3.googleusercontent.com/aida-public/AB6AXuDZyNGDtlI1givjubM2ehXEtzNdEWeoqUUPQxZm8OJR6Dzz1LULoMPq73O9UFxkXPdyGR3NC6NqaIMDFog-odQ0ntMG9nB_BZEL-bfVNAspHK1i2KMNNUHz4MNMmF48LfoAUbjaxANXPoAHLcmBP5rq3GztrHHeohtwiqR2nQZ3Z0ZnkU6xWwSztw-ySXd5Tbb1DY0Re9Ccl-FGDKSdOIK7KLF-nQIOr_36EW9bsinqj_gcqTGztRHJ4RkMYfLr89owZtglkHNE4h4"
+                src="https://images.unsplash.com/photo-1639762681485-074b7f938ba0?auto=format&fit=crop&q=80&w=800"
               />
               <div className="absolute inset-0 bg-gradient-to-t from-[#0B0B12] via-transparent to-transparent"></div>
               <div className="absolute bottom-6 left-6 right-6 p-4 backdrop-blur-md bg-slate-900/40 rounded-xl border border-white/5">
@@ -199,7 +210,7 @@ export default function Home() {
                 <div className="flex items-center gap-2">
                   <span className="w-2 h-2 rounded-full bg-primary animate-ping"></span>
                   <span className="text-xs font-mono text-on-surface">
-                    ZK-P Node: Active - 12ms latency
+                    ZK-P Node: Active - Testnet
                   </span>
                 </div>
               </div>
@@ -213,56 +224,40 @@ export default function Home() {
                 Recent Activity
               </h3>
               <div className="space-y-6">
-                <div className="flex gap-4 items-start">
-                  <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-sm text-primary">
-                      key
-                    </span>
+                {isLoading ? (
+                  <div className="flex justify-center p-8">
+                    <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
                   </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-semibold">
-                      Proof Generated
-                    </span>
-                    <span className="text-[10px] text-outline">
-                      2 mins ago • Uniswap V3
-                    </span>
+                ) : stats.recentActivity.length === 0 ? (
+                  <div className="text-center py-8 text-outline text-sm italic">
+                    No recent activity
                   </div>
-                </div>
-                <div className="flex gap-4 items-start">
-                  <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-sm text-secondary">
-                      visibility
-                    </span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-semibold">
-                      Consent Verified
-                    </span>
-                    <span className="text-[10px] text-outline">
-                      1 hour ago • Bankless ID
-                    </span>
-                  </div>
-                </div>
-                <div className="flex gap-4 items-start">
-                  <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center shrink-0">
-                    <span className="material-symbols-outlined text-sm text-error-container">
-                      lock_reset
-                    </span>
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-sm font-semibold">
-                      Locker Re-keyed
-                    </span>
-                    <span className="text-[10px] text-outline">
-                      Yesterday • Auto-rotate
-                    </span>
-                  </div>
-                </div>
+                ) : (
+                  stats.recentActivity.map((activity: any) => (
+                    <div key={activity._id} className="flex gap-4 items-start">
+                      <div className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center shrink-0">
+                        <span className="material-symbols-outlined text-sm text-primary">
+                          {activity.eventType === "wallet_connected" ? "account_balance_wallet" : 
+                           activity.eventType === "proof_generated" ? "key" :
+                           activity.eventType === "document_uploaded" ? "upload_file" : "history"}
+                        </span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-sm font-semibold truncate max-w-[150px]">
+                          {activity.description}
+                        </span>
+                        <span className="text-[10px] text-outline">
+                          {new Date(activity.timestamp).toLocaleString()}
+                        </span>
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </div>
-            <button className="w-full py-3 mt-8 border-t border-outline-variant/10 text-xs font-bold uppercase tracking-widest text-primary hover:text-white transition-colors">
+            <Link href="/activity" className="w-full py-3 mt-8 border-t border-outline-variant/10 text-xs font-bold uppercase tracking-widest text-primary hover:text-white transition-colors text-center block">
               View Full Audit Log
-            </button>
+            </Link>
           </div>
         </div>
       </main>
@@ -273,5 +268,6 @@ export default function Home() {
     </div>
   );
 }
+
 
 
