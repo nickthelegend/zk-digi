@@ -1,74 +1,117 @@
 # ZK DigiLocker — Technical Specification
 
+> **Last Updated:** April 2026
+> **Status:** In Development — Core features being implemented
+
 ## 1. System Overview
+
 ZK DigiLocker is a multi-contract ecosystem on Algorand designed for privacy-preserving identity verification. It uses snarkjs-algorand as its cryptographic backbone.
 
-## 2. Proof System Selection & Rationale
+**Current Implementation:**
+- Phase 1: Frontend + Convex Metadata (Complete)
+- Phase 2: ZK Circuit Development (In Progress)
+- Phase 3: On-Chain Verifier (Planned)
+
+## 2. Proof System
+
+### Current (Phase 1.5)
+- **System:** Groth16 (BN254)
+- **Rationale:** Working placeholder for proof-of-concept; trusted setup already completed
+
+### Target (Phase 2)
 - **System:** Groth16 (BLS12-381)
 - **Rationale:** 
-  - Direct support in Algorand AVM 10.
-  - Optimal 128-bit security for identity data.
-  - Small proof size (3 G1/G2 points).
-  - Low on-chain verification cost (~5-10 mAlgos).
+  - Direct support in Algorand AVM 10
+  - Optimal 128-bit security for identity data
+  - Small proof size (3 G1/G2 points)
+  - Low on-chain verification cost (~5-10 mAlgos)
 
 ## 3. Circuit Specifications
 
-### age_check.circom
-- **Condition:** `birth_year + 18 <= current_year` (plus month/day logic).
-- **Private Inputs:** `birth_year`, `birth_month`, `birth_day`.
-- **Public Signals:** `min_age`, `current_year`, `current_month`, `current_day`.
-- **Constraints:** ~500 R1CS constraints.
+### age_check.circom ⏳ IN PROGRESS
+- **Status:** Circuit template exists, trusted setup pending
+- **Condition:** `birth_year + 18 <= current_year` (plus month/day logic)
+- **Private Inputs:** `birth_year`, `birth_month`, `birth_day`
+- **Public Signals:** `min_age`, `current_year`, `current_month`, `current_day`
+- **Constraints:** ~500 R1CS constraints
 
-### kyc_verified.circom
-- **Condition:** `VerifySig(PAN_Hash, Issuer_PK, Signature) == 1`.
-- **Private Inputs:** `pan_number`, `aadhaar_hash`, `issuer_sig`, `m_pk`.
-- **Public Signals:** `kyc_status_hash`, `issuer_pk`.
-- **Constraints:** ~10k+ R1CS constraints (due to hash/signature logic).
+### kyc_verified.circom ❌ NOT STARTED
+- **Condition:** `VerifySig(PAN_Hash, Issuer_PK, Signature) == 1`
+- **Private Inputs:** `pan_number`, `aadhaar_hash`, `issuer_sig`, `m_pk`
+- **Public Signals:** `kyc_status_hash`, `issuer_pk`
+- **Constraints:** ~10k+ R1CS constraints
 
 ## 4. Smart Contract Specifications
 
-### Verifier Contracts
+### Verifier Contract (Current)
+- **Status:** Mock implementation — returns `true` for all proofs
+- **Location:** `zk-digi-contracts/.../smart_contracts/zk_verifier/contract.algo.ts`
+
+### Verifier Contract (Target)
 - **Class:** `Groth16Bls12381Verifier`
 - **ABI Method:** `verify(signals: PublicSignals, proof: Groth16Bls12381Proof): void`
-- **Storage:** No persistent state (stateless verification logic).
-- **Fees:** Verifier must be called via an transaction group with added opcode budget (`OpUp`). Each verification app call requires ~0.005 - 0.01 ALGO fee for inner transactions.
+- **Storage:** No persistent state (stateless verification logic)
+- **Fees:** Verifier must be called via transaction group with added opcode budget (`OpUp`)
 
-### Vault Contract
-- **Storage:** Uses **Box Storage** to store `Account -> Array<EncryptedDocHash>`.
-- **Access Control:** Only the Account owner can add hashes. Reading is permitted only with valid ZK proof validation.
+### Vault Storage (Planned)
+- **Storage:** Uses Algorand **Box Storage** to store `Account -> Array<EncryptedDocHash>`
+- **Access Control:** Only Account owner can add hashes
 
-### Consent Manager
-- **Global State:** `AppID -> EnabledStatus`.
-- **Action:** Records a `ConsentRecord` on-chain (as an event/log) whenever a ZK proof is verified for a specific app.
+### Consent Manager (Planned)
+- **Global State:** `AppID -> EnabledStatus`
+- **Action:** RecordsConsent on-chain when ZK proof is verified
 
-## 5. Client-Side SDK Specification
-- **`generateProof(inputs: CircuitInputs, circuit: string): ZKProof`**: High-level wrapper for snarkjs `fullProve`.
-- **`encodeProof(rawProof: JSONProof): Groth16Bls12381Proof`**: Library call to format points into big-endian byte arrays.
-- **`buildVerifyCall(proof: ZKProof, signals: BigInt[]): AtomicTransactionComposer`**: Helper to build the Algorand ATC call with necessary `OpUp` budget.
+## 5. Client-Side SDK
+
+### Current
+- Basic snarkjs wrapper in `src/types/snarkjs.d.ts`
+
+### Planned
+- **`generateProof(inputs: CircuitInputs, circuit: string): ZKProof`** — Wrapper for snarkjs fullProve
+- **`encodeProof(rawProof: JSONProof): Groth16Bls12381Proof`** — Format points into big-endian byte arrays
+- **`buildVerifyCall(proof: ZKProof, signals: BigInt[]): AtomicTransactionComposer`** — Build ATC call with OpUp
 
 ## 6. Security Model
-- **Revealed Data:** Only the boolean verification result and specific public signals (e.g., `min_age`) are visible.
-- **Hidden Data:** The prover's exact DOB, ID numbers, or document contents are NEVER uploaded or revealed.
-- **Replay Protection:** Public signals should include a `nonce` or `user_address` to prevent re-using a proof generated for one user by another.
 
-## 7. Algorand-Specific Constraints
-- **Opcode Budget:** ~40,000 to 100,000 budget required for BLS12-381 pairing verification.
-- **Transaction Size:** Restricted to 1 KB per txn, so proofs and public inputs are passed via `ApplicationArgs`.
-- **ARC-4:** All contract methods MUST follow the ARC-4 ABI standard.
+- **Revealed Data:** Only boolean verification result and public signals
+- **Hidden Data:** User's exact DOB, ID numbers, or document contents are NEVER uploaded
+- **Replay Protection:** Public signals include `nonce` or `user_address`
 
-## 8. Testing Strategy
-- **Unit Tests:** `circom-tester` for constraint validation.
-- **Integration Tests:** `AlgoKit` with `vitest` for LocalNet contract deployment and verification.
-- **Stress Tests:** Verifying opcode budget limits via simulation before sending mainnet transactions.
+## 7. Algorand Constraints
 
-## 9. Error Codes & Failure Modes
-- `FAIL_SUBGROUP`: Proof point not in correct G1/G2 subgroup.
-- `FAIL_FIELD`: Public signal exceeds scalar field modulus Fr.
-- `FAIL_VERIFY`: Cryptographic verification equation did not balance.
-- `FAIL_BUDGET`: Insufficient opcode budget for the `pairingCheck`.
+- **Opcode Budget:** ~40,000 to 100,000 required for BLS12-381 pairing
+- **Transaction Size:** Max 1KB per txn (proofs passed via ApplicationArgs)
+- **ARC-4:** Contract methods follow ARC-4 ABI standard
+
+## 8. Testing
+
+- **Unit Tests:** circom-tester for constraint validation
+- **Integration:** AlgoKit with Vitest for LocalNet deployment
+- **E2E:** Full proof-to-verification pipeline
+
+## 9. Error Codes
+
+- `FAIL_SUBGROUP` — Proof point not in correct subgroup
+- `FAIL_FIELD` — Public signal exceeds scalar field modulus
+- `FAIL_VERIFY` — Cryptographic verification failed
+- `FAIL_BUDGET` — Insufficient opcode budget for pairingCheck
 
 ## 10. Glossary
-- **Fr:** The scalar field where inputs and outputs live.
-- **G1/G2:** Elliptic curve groups where commitments (parts of the proof) live.
-- **OpUp:** Algorand technique to boost opcode budget by calling a dummy app or generating inner transactions.
-- **VKey:** Verification Key—the "public" half of the circuit parameters required for on-chain verification.
+
+- **Fr:** Scalar field where inputs/outputs live
+- **G1/G2:** Elliptic curve groups for proof points
+- **OpUp:** Algorand technique to boost opcode budget
+- **VKey:** Verification Key — public half of circuit parameters
+
+## Implementation Notes
+
+| Feature | Status | File |
+|---------|--------|------|
+| Frontend UI | ✅ Complete | `src/app/` |
+| Wallet | ✅ Complete | `src/context/WalletContext.tsx` |
+| Convex Backend | ✅ Complete | `convex/` |
+| Document Hashing | ❌ Mocked | `src/app/documents/page.tsx:35` |
+| age_check.circom | ⏳ Template | `circuits/age_check.circom` |
+| kyc_verified.circom | ❌ Missing | — |
+| On-Chain Verifier | ❌ Mocked | `contract.algo.ts` |
+| Box Storage | ❌ Convex Only | `convex/schema.ts` |

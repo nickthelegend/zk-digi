@@ -1,91 +1,158 @@
 # ZK DigiLocker — Privacy-First Identity on Algorand
 
+> **Status:** In Development — Q2 2026
+
 ## What Is This?
-ZK DigiLocker is a decentralized identity and electronic locker platform built on Algorand. It utilizes Zero-Knowledge Proofs (ZKP) to enable users to selectively disclose their identity attributes (like age, KYC status, student enrollment, and nationality) without revealing any underlying sensitive data or document copies.
 
-## How It Works
-The platform separates the **Proof of Identity** from the **Data Storage**.
-1. **User Side:** Holder generates a ZKP locally in their browser using `snarkjs` and the `zk-digi` SDK.
-2. **On-Chain:** The proof is submitted to an Algorand smart contract verifier.
-3. **Verifier App:** The verifier (implemented in TEALScript via `snarkjs-algorand`) cryptographically confirms the proof is valid against a registered public key from a trusted source.
-4. **Consent:** If valid, the verifier app issues a "Consent Token" that external applications can use to satisfy requirements (e.g., "Must be 18+").
+ZK DigiLocker is a decentralized identity platform on Algorand using Zero-Knowledge Proofs (ZKP) to enable selective disclosure of identity attributes (age, KYC, enrollment, nationality) without revealing sensitive data.
 
-### Architecture Diagram
+## Architecture
+
 ```
-[ Holder / Browser ]
-  |-- (1) Generate Proof (snarkjs)
-  |-- (2) Encode (zk-digi-sdk)
-  v
-[ Algorand Smart Contract (Verifier) ]
-  |-- (3) OpUp for Opcode Budget
-  |-- (4) pairingCheck(G1, G2)
-  |-- (5) Boolean (Pass/Fail)
-  v
-[ Verifier App / DApp ]
-  |-- (6) Satisfy Business Logic
+┌─────────────────────────────────────────────┐
+│  Next.js Frontend (Material Design 3)        │
+├─────────────────────────────────────────────┤
+│  Convex Backend (Metadata & Activity Logs)   │
+├─────────────────────────────────────────────┤
+│  snarkjs (Client-Side Proof Generation)     │
+├─────────────────────────────────────────────┤
+│  Algorand (On-Chain Verification)          │
+└─────────────────────────────────────────────┘
 ```
 
-## Proof Types Supported
-- **Age (>18):** Proves minimum age without revealing DOB.
-- **KYC Status:** Proves a valid KYC process was completed.
-- **Enrollment:** Proves student status for a given academic year.
-- **Residency:** Proves country of residence for regulatory compliance.
+## Current Implementation Status
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| **Frontend UI** | ✅ Working | Next.js 14, dark mode dashboard |
+| **Wallet Integration** | ✅ Working | Pera, Defly via @txnlab/use-wallet |
+| **Convex Backend** | ✅ Working | Documents, proofs, consents, activity |
+| **ZK Proof Gen** | ⚠️ Partial | BN254 placeholder circuit |
+| **On-Chain Verifier** | ❌ Mocked | Returns `true` for all proofs |
+| ** Circuits** | ⚠️ In Progress | age_check template exists |
+| **Box Storage** | ❌ Not Started | Using Convex metadata only |
+
+## Proof Types (Planned)
+
+- **Age (>18):** Proves minimum age without revealing DOB
+- **KYC Status:** Proves valid KYC from trusted provider
+- **Enrollment:** Proves student status for institution
+- **Residency:** Proves country of residence
 
 ## Quick Start
 
-### Prerequisites
-- Node.js v18+
-- [AlgoKit](https://github.com/algorandfoundation/algokit-cli)
-- [Circom](https://docs.circom.io/getting-started/installation/)
-- [snarkjs](https://github.com/iden3/snarkjs)
-
-### Install
 ```bash
+# Install dependencies
 cd zk-digi
 npm install
+
+# Start Convex dev server (separate terminal)
+npx convex dev
+
+# Start frontend
+npm run dev
 ```
 
-### Run LocalNet
-```bash
-algokit localnet start
-```
+## Connect Wallet
 
-### Generate a Proof (Example with Age Circuit)
-```bash
-# Setup circuit (one-time)
-snarkjs groth16 setup age_check.r1cs pot12_final.ptau age_check_0000.zkey
-# Generate proof
-snarkjs groth16 fullProve input.json age_check_js/age_check.wasm age_check_final.zkey proof.json public.json
-```
+- Install Pera Wallet or Defly Wallet browser extension
+- Click "Connect Wallet" in the UI
+- Grant permission for address access
 
-### Deploy Verifier
+## Document Onboarding
+
+1. Go to Documents page
+2. Select document type (Aadhaar, PAN, Passport, etc.)
+3. Enter document name
+4. Click "Anchor to Vault"
+5. Document metadata stored in Convex
+
+> **Note:** Document hashing currently uses placeholder (see MEMORY.md)
+
+## Generate Proof
+
 ```typescript
-import { Groth16Bls12381AppVerifier } from "snarkjs-algorand";
-const verifier = new Groth16Bls12381AppVerifier({
-  algorand,
-  zKey: "age_check_final.zkey",
-  wasmProver: "age_check.wasm"
-});
-await verifier.deploy({ defaultSender });
-```
+import { groth16 } from "snarkjs";
 
-### Verify Proof On-Chain
-```typescript
-const result = await verifier.callVerify({ birthYear: 2000, currentYear: 2024 });
-console.log("Verified:", result);
+// Current BN254 placeholder
+const { proof, publicSignals } = await groth16.fullProve(
+  { in: 15 },
+  "/circuits/circuit_bn254.wasm",
+  "/circuits/groth16_bn254_circuit_final.zkey"
+);
 ```
 
 ## Project Structure
-- `circuits/`: `.circom` source files for ZK circuits.
-- `contracts/`: TEALScript smart contracts for verification and registry.
-- `sdk/`: Client-side library for proof generation and encoding.
-- `tests/`: Integration tests using AlgoKit and LocalNet.
 
-## ZK Proof Flow
-The project relies on the **Groth16 (BLS12-381)** proof system for its optimal balance of proof size and verification speed on the Algorand blockchain.
+```
+zk-digi/
+├── src/
+│   ├── app/              # Next.js pages
+│   ├── components/       # Reusable UI components
+│   ├── context/         # Wallet context
+│   └── types/          # TypeScript definitions
+├── convex/             # Convex backend
+├── public/
+│   └── circuits/       # ZK proof artifacts (BN254)
+├── SPEC.md            # Technical specification
+├── CONTEXT.md         # Technical context
+└── MEMORY.md         # Implementation status
+```
+
+## Technical Details
+
+### Current Proof System
+- **System:** Groth16 (BN254)
+- **Curve:** alt_bn128
+- **Security:** ~100-bit
+
+### Target Proof System (Phase 2)
+- **System:** Groth16 (BLS12-381)
+- **Curve:** bls12_381
+- **Security:** ~128-bit
+
+### Dependencies
+
+- **snarkjs:** ^0.7.6 — ZK proof library
+- **@txnlab/use-wallet-react:** Wallet connection
+- **convex:** Backend & real-time database
+- **algorand:** Blockchain interaction
+- **circom:** Circuit compilation
+
+## Roadmap
+
+### Phase 1 (Current)
+- [x] Frontend UI
+- [x] Wallet integration
+- [x] Convex backend
+- [x] Document upload UI
+- [x] Proof generation UI
+
+### Phase 2 (Q2 2026)
+- [ ] Real document hashing (SHA-256)
+- [ ] age_check.circom with trusted setup
+- [ ] kyc_verified.circom circuit
+- [ ] Real on-chain verifier
+
+### Phase 3 (Q3 2026)
+- [ ] BLS12-381 migration
+- [ ] Algorand Box Storage
+- [ ] Consent manager
+- [ ] App registry
+
+## Known Issues
+
+1. **Document hashing is mocked** — Uses `docName + timestamp` instead of real file content
+2. **Verifier is mocked** — Always returns `true`, not real cryptographic verification
+3. **BN254 curve** — Target is BLS12-381 per specification
+4. **No Algorand Box Storage** — Metadata stored in Convex only
+
+See [MEMORY.md](MEMORY.md) for implementation details.
 
 ## Contributing
-We welcome contributions to circuit design and contract optimization! Please see our [ROADMAP.md](ROADMAP.md) for current focus areas.
+
+Contributions welcome! Please see [ROADMAP.md](ROADMAP.md) for current focus areas.
 
 ## License
+
 MIT
