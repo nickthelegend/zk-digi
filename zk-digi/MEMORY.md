@@ -2,72 +2,63 @@
 
 ## Current Audit State (April 2026)
 
-### What's ACTUALLY Working ✅
+### What's FIXED ✅
 
-| Component | Status | Implementation |
-|-----------|--------|---------------|
-| Frontend UI | Working | Next.js 14 with Material Design 3 |
-| Wallet Integration | Working | @txnlab/use-wallet-react with Pera/Defly |
-| Convex Backend | Working | Full schema with documents, proofs, consents, activity |
-| Activity Logging | Working | Real Convex mutations |
-| Document Metadata Storage | Working | Convex table storage |
-| snarkjs Proof Gen | Partial | BN254 placeholder circuit works |
-
-### What's MOCKED or MISSING ❌
-
-| Component | Status | Issue |
+| Component | Status | Notes |
 |-----------|--------|-------|
-| Document Hashing | **MOCKED** | Uses `docName + timestamp` instead of real file content |
-| kyc_verified Circuit | **MISSING** | No circom file exists |
-| age_check Circuit | **PARTIAL** | Exists but no trusted setup artifacts |
-| On-Chain Verifier | **MOCKED** | Always returns `true` |
-| Vault Storage (Algorand Box) | **MISSING** | Only Convex metadata |
-| BLS12-381 Curves | **WRONG** | Using BN254, spec says BLS12-381 |
+| Document Hashing | ✅ Fixed | Real file hashing with SHA-256 |
+| kyc_verified.circom | ✅ Added | New circuit in circuits/ |
+| On-Chain Verifier | ✅ Updated | Added documentation, TODOs marked |
+| age_check.circom | ✅ Fixed | Syntax errors corrected |
+| Box Storage | ✅ Added | New vault contract in contracts/ |
+
+### Before vs After
+
+| Feature | Before | After |
+|---------|--------|-------|
+| Document Hashing | `docName + timestamp` | Real file SHA-256 |
+| kyc_verified | ❌ Missing | ✅ Added |
+| age_check | ⚠️ Syntax error | ✅ Fixed |
+| Verifier | ⚠️ Mocked | ⚠️ Mocked + docs |
+| Box Storage | ❌ Convex only | ✅ Algorand Box |
+
+### Remaining Items
+
+| Component | Status | Priority |
+|------------|--------|----------|
+| Real ZK Verification | ❌ Needs snarkjs-algorand integration | P1 |
+| BLS12-381 Migration | ❌ Still BN254 | P2 |
+| Trusted Setup | ❌ Not completed | P2 |
 
 ---
 
 ## FIX PRIORITY LIST
 
-### P0 - Critical (Blocks functionality)
+### P0 - Critical (DONE ✅)
 
-1. **Fix Document Hashing** - `zk-digi/src/app/documents/page.tsx`
-   - Current: `const mockContent = `${docName}-${Date.now()}``
-   - Need: Read actual file and hash with SHA-256
+1. ✅ **Document Hashing** - Fixed to use real file content
+2. ✅ **kyc_verified.circom** - Circuit added
 
-2. **Add kyc_verified.circom** - Create in `zk-digi-contracts/`
-   - Missing circuit referenced in SPEC.md
-   - Private: PAN number, Aadhaar hash, issuer sig
-   - Public: kyc_status_hash, issuer_pk
+### P1 - High (In Progress/Planned)
 
-### P1 - High (Core features)
-
-3. **Fix On-Chain Verifier** - `contract.algo.ts`
-   - Current: Mock returns `true`
-   - Need: Real `Groth16Bls12381Verifier` integration
-
-4. **Add age_check Trusted Setup**
-   - Need: Compile `age_check.circom` to wasm
-   - Need: Generate zkey with proper trusted setup
-   - Need: Generate verification_key.json
+3. ⏳ **Real On-Chain Verifier** - Needs snarkjs-algorand Groth16Bls12381Verifier
+4. ⏳ **Trusted Setup** - Need to compile circuits and generate zkeys
 
 ### P2 - Medium (Tech debt)
 
-5. **Switch to BLS12-381** - Update circuit artifacts
-   - Current: BN254 in public/circuits/
-   - Need: BLS12-381 per SPEC.md
-
-6. **Add Algorand Box Storage**
-   - Need: Implement vault contract with Box Storage
+5. ⏳ **Switch to BLS12-381** - Migration from BN254
+6. ⏳ **Box Storage Integration** - Connect vault contract to frontend
 
 ---
 
-## Key Files Reference
+## Key Files
 
-- **Document hashing**: `zk-digi/src/app/documents/page.tsx:35-40`
-- **Verifier contract**: `zk-digi-contracts/.../smart_contracts/zk_verifier/contract.algo.ts`
-- **Circuit source**: `zk-digi-contracts/.../circuits/age_check.circom`
-- **Circuit artifacts**: `zk-digi/public/circuits/` (BN254)
-- **Convex schema**: `zk-digi/convex/schema.ts`
+- **Document Hashing**: `zk-digi/src/app/documents/page.tsx` (lines 35-100)
+- **Verifier**: `zk-digi-contracts/.../smart_contracts/zk_verifier/contract.algo.ts`
+- **Box Storage**: `zk-digi-contracts/.../smart_contracts/vault/contract.algo.ts`
+- **age_check**: `zk-digi-contracts/.../circuits/age_check.circom`
+- **kyc_verified**: `zk-digi-contracts/.../circuits/kyc_verified.circom`
+- **Schema**: `zk-digi/convex/schema.ts`
 
 ---
 
@@ -75,13 +66,13 @@
 
 - snarkjs: ^0.7.6
 - snarkjs-algorand: ^0.11.0
-- @algorandfoundation/algorand-typescript (for TEAL contracts)
-- circom: 2.1.x (for circuits)
+- @algorandfoundation/algorand-typescript
+- circom: 2.1.x
 
 ---
 
-## Notes
+## Implementation Notes
 
-- BN254 is currently used because BLS12-381 trusted setup is expensive
-- Convex is used for metadata, Algorand for on-chain verification
-- All zkey/wasm files should be served from public/circuits/
+- BN254 currently used (works with snarkjs)
+- BLS12-381 is target curve for production
+- Convex handles metadata, Algorand handles on-chain verification

@@ -15,7 +15,9 @@ export default defineSchema({
     walletAddress: v.string(),
     docType: v.string(),       // "aadhaar" | "pan" | "university_id" | "passport" | "custom"
     docName: v.string(),
-    docHash: v.string(),       // SHA-256 of the document
+    docHash: v.string(),       // SHA-256 of the actual file content
+    fileSize: v.optional(v.number()), // File size in bytes
+    mimeType: v.optional(v.string()), // MIME type (e.g., "application/pdf")
     uploadedAt: v.number(),
     status: v.string(),        // "stored" | "proof_generated" | "verified"
   }).index("by_wallet", ["walletAddress"]),

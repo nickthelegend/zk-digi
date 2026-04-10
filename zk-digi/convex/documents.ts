@@ -7,6 +7,8 @@ export const uploadDocument = mutation({
     docType: v.string(),
     docName: v.string(),
     docHash: v.string(),
+    fileSize: v.optional(v.number()),
+    mimeType: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
     return await ctx.db.insert("documents", {
@@ -14,6 +16,8 @@ export const uploadDocument = mutation({
       docType: args.docType,
       docName: args.docName,
       docHash: args.docHash,
+      fileSize: args.fileSize ?? null,
+      mimeType: args.mimeType ?? null,
       uploadedAt: Date.now(),
       status: "stored",
     });

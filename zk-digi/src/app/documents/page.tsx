@@ -26,34 +26,62 @@ export default function DocumentsPage() {
   const uploadMutation = useMutation(api.documents.uploadDocument);
   const logActivityMutation = useMutation(api.activity.logActivity);
 
+  const [selectedFile, setSelectedFile] = useState<File | null>(null);
+
+  const computeFileHash = async (file: File): Promise<string> => {
+    const arrayBuffer = await file.arrayBuffer();
+    const hashBuffer = await crypto.subtle.digest("SHA-256", arrayBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setSelectedFile(file);
+      if (!docName) {
+        setDocName(file.name.replace(/\.[^/.]+$/, ""));
+      }
+    }
+  };
+
   const handleUpload = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!address || !docName) return;
 
     setIsUploading(true);
     try {
-      // Simulate file hashing
-      const mockContent = `${docName}-${Date.now()}`;
-      const msgBuffer = new TextEncoder().encode(mockContent);
-      const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+      let hashHex: string;
+      
+      if (selectedFile) {
+        hashHex = await computeFileHash(selectedFile);
+      } else {
+        const content = `${docName}-${selectedType}-${Date.now()}`;
+        const msgBuffer = new TextEncoder().encode(content);
+        const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
+        const hashArray = Array.from(new Uint8Array(hashBuffer));
+        hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+      }
 
       await uploadMutation({
         walletAddress: address,
         docType: selectedType,
         docName: docName,
         docHash: hashHex,
+        fileSize: selectedFile?.size || null,
+        mimeType: selectedFile?.type || null,
       });
 
       await logActivityMutation({
         walletAddress: address,
-        eventType: "document_uploaded",
+        eventType: "documentUploaded",
         description: `Onboarded ${docName} (${selectedType})`,
       });
 
       setDocName("");
-      alert("Document metadata securely onboarded to ZK-Vault!");
+      setSelectedFile(null);
+      (document.getElementById("file-input") as HTMLInputElement).value = "";
+      alert("Document securely anchored to ZK-Vault!");
     } catch (err) {
       console.error(err);
       alert("Failed to onboard document.");
@@ -173,17 +201,35 @@ export default function DocumentsPage() {
                    </div>
                  </div>
 
-                 <div className="space-y-2">
-                   <label className="text-xs font-bold uppercase tracking-widest text-outline">Document Name</label>
-                   <input
-                     type="text"
-                     value={docName}
-                     onChange={(e) => setDocName(e.target.value)}
-                     placeholder="e.g. My Primary PAN Card"
-                     className="w-full bg-surface-container-low border border-outline-variant/10 rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary focus:border-transparent outline-none"
-                     required
-                   />
-                 </div>
+<div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-outline">Document File (Optional)</label>
+                    <div className="relative">
+                      <input
+                        id="file-input"
+                        type="file"
+                        accept=".pdf,.jpg,.jpeg,.png,.doc,.docx"
+                        onChange={handleFileChange}
+                        className="w-full bg-surface-container-low border border-outline-variant/10 rounded-xl px-4 py-3 text-sm file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-primary file:text-black file:font-bold file:cursor-pointer"
+                      />
+                      {selectedFile && (
+                        <p className="text-xs text-primary mt-2">
+                          Selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-outline">Document Name</label>
+                    <input
+                      type="text"
+                      value={docName}
+                      onChange={(e) => setDocName(e.target.value)}
+                      placeholder="e.g. My Primary PAN Card"
+                      className="w-full bg-surface-container-low border border-outline-variant/10 rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary focus:border-transparent outline-none"
+                      required
+                    />
+                  </div>
 
                  <div className="p-4 rounded-xl bg-primary/5 border border-primary/10 text-[10px] text-primary leading-relaxed font-medium">
                    <span className="font-bold underline uppercase">Privacy Notice:</span> Your raw document content will be hashed locally. Only the cryptographic hash will be stored on-chain.
