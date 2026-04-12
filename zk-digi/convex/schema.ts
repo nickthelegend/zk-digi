@@ -18,6 +18,7 @@ export default defineSchema({
     docHash: v.string(),       // SHA-256 of the actual file content
     fileSize: v.optional(v.number()), // File size in bytes
     mimeType: v.optional(v.string()), // MIME type (e.g., "application/pdf")
+    storageId: v.optional(v.id("_storage")), // Convex file storage ID
     uploadedAt: v.number(),
     status: v.string(),        // "stored" | "proof_generated" | "verified"
   }).index("by_wallet", ["walletAddress"]),
@@ -29,6 +30,8 @@ export default defineSchema({
     circuitName: v.string(),   // "circuit_bn254"
     proofJson: v.string(),     // JSON.stringify(proof)
     publicSignals: v.string(), // JSON.stringify(publicSignals)
+    vkeyHash: v.optional(v.string()), // SHA-256 of verification key
+    sourceDocumentId: v.optional(v.id("documents")), // Associated document
     status: v.string(),        // "generated" | "submitted" | "verified" | "failed"
     txId: v.optional(v.string()),
     appId: v.optional(v.number()),

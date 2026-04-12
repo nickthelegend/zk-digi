@@ -23,7 +23,8 @@ export default function DocumentsPage() {
   const documents = useQuery(api.documents.getDocuments, 
     address ? { walletAddress: address } : "skip"
   );
-  const uploadMutation = useMutation(api.documents.uploadDocument);
+  const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
+  const saveDocument = useMutation(api.documents.saveDocument);
   const logActivityMutation = useMutation(api.activity.logActivity);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
@@ -51,36 +52,52 @@ export default function DocumentsPage() {
 
     setIsUploading(true);
     try {
+      let fileToUpload = selectedFile;
       let hashHex: string;
-      
-      if (selectedFile) {
-        hashHex = await computeFileHash(selectedFile);
+
+      if (fileToUpload) {
+        hashHex = await computeFileHash(fileToUpload);
       } else {
+        // Fallback for mock/data-only upload if no file selected
         const content = `${docName}-${selectedType}-${Date.now()}`;
         const msgBuffer = new TextEncoder().encode(content);
         const hashBuffer = await crypto.subtle.digest("SHA-256", msgBuffer);
         const hashArray = Array.from(new Uint8Array(hashBuffer));
         hashHex = hashArray.map((b) => b.toString(16).padStart(2, "0")).join("");
+        
+        // Create a dummy file blob for storage consistency
+        fileToUpload = new File([msgBuffer], `${docName}.txt`, { type: "text/plain" });
       }
 
-      await uploadMutation({
+      // 1. Get upload URL from Convex
+      const uploadUrl = await generateUploadUrl();
+
+      // 2. POST file to Convex storage
+      const result = await fetch(uploadUrl, {
+        method: "POST",
+        headers: { "Content-Type": fileToUpload.type },
+        body: fileToUpload,
+      });
+      
+      if (!result.ok) throw new Error("Failed to upload to storage");
+      const { storageId } = await result.json();
+
+      // 3. Save metadata to Convex DB
+      await saveDocument({
         walletAddress: address,
         docType: selectedType,
         docName: docName,
         docHash: hashHex,
-        fileSize: selectedFile?.size || undefined,
-        mimeType: selectedFile?.type || undefined,
-      });
-
-      await logActivityMutation({
-        walletAddress: address,
-        eventType: "documentUploaded",
-        description: `Onboarded ${docName} (${selectedType})`,
+        storageId,
+        fileType: fileToUpload.type,
+        fileSizeBytes: fileToUpload.size,
       });
 
       setDocName("");
       setSelectedFile(null);
-      (document.getElementById("file-input") as HTMLInputElement).value = "";
+      const fileInput = document.getElementById("file-input") as HTMLInputElement;
+      if (fileInput) fileInput.value = "";
+      
       alert("Document securely anchored to ZK-Vault!");
     } catch (err) {
       console.error(err);

@@ -1,141 +1,97 @@
-import { Contract, GlobalState, Bytes, LocalState } from '@algorandfoundation/algorand-typescript'
-import { abimethod } from '@algorandfoundation/algorand-typescript/arc4'
-import { bytes, uint64 } from '@algorandfoundation/algorand-typescript'
+import { Contract, GlobalState, itxn, TemplateVar, Global, op, Bytes, type bytes, type uint64 } from '@algorandfoundation/algorand-typescript'
+import { abimethod, decodeArc4 } from '@algorandfoundation/algorand-typescript/arc4'
+import { verify, type Groth16Bn254Proof, type Groth16Bn254VerificationKey } from './groth16_bn254.algo'
+import { type PublicSignals } from './bn254_common.algo'
 
 /**
  * ZK-Verifier Smart Contract
  * 
- * Handles Zero-Knowledge Proof verification for identity claims.
- * 
- * CURRENT STATUS: Partial implementation
- * - Basic structure is in place
- * - Real ZK verification requires:
- *   1. Verified ZKey with trusted setup
- *   2. snarkjs-algorand Groth16Bls12381Verifier integration
- *   3. On-chain pairingCheck opcode usage
- * 
- * Integration with snarkjs-algorand:
- * ```typescript
- * import { Groth16Bls12381AppVerifier } from 'snarkjs-algorand';
- * 
- * const verifier = new Groth16BlsAppVerifier({
- *   algorand,
- *   zKey: fs.readFileSync('circuits/age_check_final.zkey'),
- *   wasmProver: fs.readFileSync('circuits/age_check.wasm')
- * });
- * await verifier.deploy({ ... });
- * ```
+ * Handles zero-knowledge proof verification using native Algorand AVM opcodes.
+ * Integrates with snarkjs-algorand patterns for Groth16 BN254.
  */
-
 export class ZkVerifier extends Contract {
   // Global state
-  public verificationEnabled = GlobalState<bytes>({ key: 'v' })    // 1 = enabled
-  public verifierAddress = GlobalState<bytes>({ key: 'a' })            // admin address
-  public proofCount = GlobalState<bytes>({ key: 'c' })                // total proofs verified
-  public circuitType = GlobalState<bytes>({ key: 't' })               // "age_check" | "kyc"
+  public verificationEnabled = GlobalState<uint64>({ key: 'v' })    // 1 = enabled
+  public proofCount = GlobalState<uint64>({ key: 'c' })            // total proofs verified
+  public circuitType = GlobalState<bytes>({ key: 't' })           // metadata: e.g. "multiplier"
   
-  // Box storage for verification keys
-  // In production: store VKey in box to allow circuit updates
-  public verificationKeys = GlobalState<bytes>({ key: 'vk' })
-
+  /**
+   * Initialize the verifier
+   */
   @abimethod()
-  public initialize(admin: bytes, circuit: bytes): void {
-    this.verificationEnabled.value = Bytes('1')
-    this.verifierAddress.value = admin
-    this.proofCount.value = Bytes('0')
+  public initialize(circuit: bytes): void {
+    this.verificationEnabled.value = 1
+    this.proofCount.value = 0
     this.circuitType.value = circuit
   }
 
   /**
-   * Verify a ZK proof
+   * Internal helper to increase opcode budget.
+   * We now make this public so the client can call it multiple times in a group
+   * to "pool" a massive budget.
+   */
+  @abimethod()
+  public opUp(): void {
+    // 15 iterations is the industry standard for stable multi-call pooling
+    for (let i: uint64 = 0; i < 15; i++) {
+        itxn.payment({
+            receiver: Global.currentApplicationAddress,
+            amount: 0
+        }).submit()
+    }
+  }
+
+  /**
+   * Get the Verification Key from Template Variable.
+   * This VK is baked into the contract at compile time.
+   */
+  private getVerificationKey(): Groth16Bn254VerificationKey {
+    const vkBytes = TemplateVar<bytes>("VERIFICATION_KEY")
+    return decodeArc4<Groth16Bn254VerificationKey>(vkBytes)
+  }
+
+  /**
+   * Verify a ZK proof (Groth16 BN254) using the hardcoded template VK.
    * 
-   * CURRENT: Always returns true (MOCKED)
-   * TARGET: Integration with snarkjs-algorand pairingCheck
-   * 
-   * @param proofA - G1 proof point (96 bytes)
-   * @param proofB - G2 proof point (192 bytes)  
-   * @param proofC - G1 proof point (96 bytes)
-   * @param publicSignals - Public input signals
+   * @param proof - The Groth16 proof points (pi_a, pi_b, pi_c)
+   * @param publicSignals - Public signals array
    * @returns boolean - proof validity
    */
   @abimethod()
   public verifyProof(
-    proofA: bytes,
-    proofB: bytes,
-    proofC: bytes,
-    publicSignals: bytes
+    proof: Groth16Bn254Proof,
+    publicSignals: PublicSignals
   ): boolean {
-    // TODO: Implement real Groth16 BLS12-381 verification
-    // 
-    // Real implementation using Algorand's native pairingCheck:
-    // ```teal
-    // # This would be in the compiled TEAL
-    // txna ApplicationArgs 0  // proofA
-    // txna ApplicationArgs 1  // proofB
-    // txna ApplicationArgs 2  // proofC
-    // txna ApplicationArgs 3  // publicSignals
-    // pairingCheck
-    // ```
-    //
-    // The snarkjs-algorand library provides:
-    // - Groth16Bls12381Verifier class
-    // - encodeProof() for ABI encoding
-    // - OpUp for opcode budget management
-    
-    // Current: Return true (verification always passes)
-    // This is where the SECURITY BUG is - proofs aren't actually verified!
-    return true
-  }
+    // 1. Check if verification is active
+    if (this.verificationEnabled.value === 0) return false
 
-  /**
-   * Verify document hash directly (without ZK)
-   * 
-   * Used as fallback when ZK circuit isn't available
-   */
-  @abimethod()
-  public verifyDocument(documentHash: bytes): boolean {
-    // TODO: Add real hash verification against stored hashes
-    // For now, accept any hash
-    return true
-  }
+    // 2. Perform real verification against BN254 curve
+    // NOTE: Budget must be pooled by calling opUp() multiple times in the group.
+    const isValid = verify(
+        this.getVerificationKey(), 
+        publicSignals, 
+        proof
+    )
 
-  /**
-   * Get total number of proofs verified
-   */
-  @abimethod()
-  public getProofCount(): bytes {
-    return this.proofCount.value
-  }
-
-  /**
-   * Enable/disable verification
-   */
-  @abimethod()
-  public setVerificationEnabled(enabled: bytes): void {
-    this.verificationEnabled.value = enabled
-  }
-
-  /**
-   * Update verifier admin address
-   */
-  @abimethod()
-  public updateVerifier(newVerifier: bytes): void {
-    this.verifierAddress.value = newVerifier
-  }
-
-  /**
-   * Record a verification event (for audit)
-   * Called by external apps after successful verification
-   */
-  @abimethod()
-  public recordVerification(
-    wallet: bytes,
-    proofType: bytes,
-    result: boolean
-  ): void {
-    if (result) {
-      const current = uint64(this.proofCount.value) 
-      this.proofCount.value = Bytes((current + 1).toString())
+    // 3. Record success in global state
+    if (isValid) {
+      this.proofCount.value = this.proofCount.value + 1
     }
+
+    return isValid
+  }
+
+  /**
+   * Dummy function to include VerificationKey type in ARC-56
+   */
+  @abimethod({ allowActions: 'CloseOut' })
+  public _dummy(vk: Groth16Bn254VerificationKey): void {}
+
+  /**
+   * Admin: Enable or disable verification
+   */
+  @abimethod()
+  public setVerificationEnabled(enabled: uint64): void {
+    this.verificationEnabled.value = enabled
   }
 }

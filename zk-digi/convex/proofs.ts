@@ -8,33 +8,44 @@ export const saveProof = mutation({
     circuitName: v.string(),
     proofJson: v.string(),
     publicSignals: v.string(),
+    vkeyHash: v.string(),
+    sourceDocumentId: v.optional(v.id("documents")),
   },
   handler: async (ctx, args) => {
-    return await ctx.db.insert("proofs", {
+    const id = await ctx.db.insert("proofs", {
       walletAddress: args.walletAddress,
       proofType: args.proofType,
       circuitName: args.circuitName,
       proofJson: args.proofJson,
       publicSignals: args.publicSignals,
+      vkeyHash: args.vkeyHash,
+      sourceDocumentId: args.sourceDocumentId,
       status: "generated",
       generatedAt: Date.now(),
     });
+
+    await ctx.db.insert("activity", {
+      walletAddress: args.walletAddress,
+      eventType: "proof_generated",
+      description: `Generated ${args.proofType} proof`,
+      metadata: JSON.stringify({ proofType: args.proofType, circuitName: args.circuitName }),
+      timestamp: Date.now(),
+    });
+
+    return id;
   },
 });
 
 export const updateProofStatus = mutation({
   args: {
-    id: v.id("proofs"),
+    proofId: v.id("proofs"),
     status: v.string(),
     txId: v.optional(v.string()),
-    appId: v.optional(v.number()),
+    verifiedAt: v.optional(v.number()),
   },
   handler: async (ctx, args) => {
-    const patch: any = { status: args.status };
-    if (args.txId) patch.txId = args.txId;
-    if (args.appId) patch.appId = args.appId;
-    if (args.status === "verified") patch.verifiedAt = Date.now();
-    await ctx.db.patch(args.id, patch);
+    const { proofId, ...updates } = args;
+    await ctx.db.patch(proofId, updates);
   },
 });
 

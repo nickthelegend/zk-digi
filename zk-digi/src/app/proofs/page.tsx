@@ -15,39 +15,48 @@ export default function ProofsPage() {
   const proofs = useQuery(api.proofs.getProofs, 
     address ? { walletAddress: address } : "skip"
   );
+  const documents = useQuery(api.documents.getDocuments,
+    address ? { walletAddress: address } : "skip"
+  );
   const saveProofMutation = useMutation(api.proofs.saveProof);
   const logActivityMutation = useMutation(api.activity.logActivity);
 
-  const handleGenerateAgeProof = async () => {
+  const [selectedTemplate, setSelectedTemplate] = useState("Age Verification (> 18)");
+  const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+
+  const handleGenerateProof = async () => {
     if (!address) return;
     
     setIsGenerating(true);
     try {
-      // 1. Generate proof client-side
-      const { proof, publicSignals } = await ZKProofService.generateAgeProof(birthYear, 18);
+      const userInput: Record<string, string | number> = {};
       
-      // 2. Format and verify for immediate feedback
-      const isValid = await ZKProofService.verifyAgeProof(proof, publicSignals);
+      if (selectedTemplate === "Age Verification (> 18)") {
+        userInput.birthYear = birthYear;
+      }
+
+      if (selectedDocumentId) {
+        const doc = documents?.find(d => d._id === selectedDocumentId);
+        if (doc) userInput.docHash = doc.docHash;
+      }
+
+      // Generate ZK proof (client-side)
+      const { generateProof } = await import("@/lib/zkProofService");
+      const result = await generateProof(selectedTemplate, userInput);
       
-      if (!isValid) {
+      if (!result.locallyValid) {
         throw new Error("Generated proof failed local verification check.");
       }
 
-      // 3. Save to Convex
-      const { proofJson, publicSignals: signalsJson } = ZKProofService.formatProof(proof, publicSignals);
-      
+      // Save to Convex
       await saveProofMutation({
         walletAddress: address,
-        proofType: "age_check",
-        circuitName: "circuit_bn254",
-        proofJson,
-        publicSignals: signalsJson,
-      });
-
-      await logActivityMutation({
-        walletAddress: address,
-        eventType: "proof_generated",
-        description: `Generated Age Verification Proof (Age > 18)`,
+        proofType: selectedTemplate,
+        circuitName: "circuit_bn254 v1.0",
+        proofJson: JSON.stringify(result.proof),
+        publicSignals: JSON.stringify(result.publicSignals),
+        vkeyHash: result.vkeyHash,
+        sourceDocumentId: selectedDocumentId as any || undefined,
       });
 
       alert("ZK-Proof generated and verified successfully!");
@@ -57,6 +66,27 @@ export default function ProofsPage() {
     } finally {
       setIsGenerating(false);
     }
+  };
+
+  const handleShareProof = async (proofId: string) => {
+    const proof = proofs?.find(p => p._id === proofId);
+    if (!proof) return;
+    await navigator.clipboard.writeText(proof.proofJson);
+    alert("Proof JSON copied to clipboard!");
+  };
+
+  const handleInspectProof = (proofId: string) => {
+    const proof = proofs?.find(p => p._id === proofId);
+    if (!proof) return;
+    console.log("Proof details:", {
+      type: proof.proofType,
+      publicSignals: JSON.parse(proof.publicSignals),
+      proofBody: JSON.parse(proof.proofJson),
+      vkeyHash: proof.vkeyHash,
+      status: proof.status,
+      generatedAt: new Date(proof.generatedAt).toISOString(),
+    });
+    alert("Proof details logged to console (F12) for inspection.");
   };
 
   if (!isConnected) {
@@ -135,18 +165,24 @@ export default function ProofsPage() {
                         {p.circuitName} v1.0
                       </div>
                     </div>
-                    <div className="space-y-4">
+                      <div className="space-y-4">
                       <div className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant font-bold">Verification Key Hash</div>
                       <code className="block bg-surface-container-low p-4 rounded-xl text-primary-dim text-xs break-all font-mono border border-outline-variant/10">
-                        {p._id.substring(0, 32)}...
+                        {p.vkeyHash ? p.vkeyHash.substring(0, 32) + "..." : p._id.substring(0, 32) + "..."}
                       </code>
                     </div>
                     <div className="mt-8 flex gap-4">
-                      <button className="flex items-center gap-2 px-6 py-2 rounded-full bg-surface-container-highest text-xs font-bold font-headline uppercase tracking-wider hover:bg-outline-variant/30 transition-all">
+                      <button 
+                        onClick={() => handleShareProof(p._id)}
+                        className="flex items-center gap-2 px-6 py-2 rounded-full bg-surface-container-highest text-xs font-bold font-headline uppercase tracking-wider hover:bg-outline-variant/30 transition-all"
+                      >
                         <span className="material-symbols-outlined text-sm">share</span>
                         Share Proof
                       </button>
-                      <button className="flex items-center gap-2 px-6 py-2 rounded-full border border-outline-variant/20 text-xs font-bold font-headline uppercase tracking-wider hover:border-primary/50 transition-all text-on-surface-variant hover:text-on-surface">
+                      <button 
+                        onClick={() => handleInspectProof(p._id)}
+                        className="flex items-center gap-2 px-6 py-2 rounded-full border border-outline-variant/20 text-xs font-bold font-headline uppercase tracking-wider hover:border-primary/50 transition-all text-on-surface-variant hover:text-on-surface"
+                      >
                         <span className="material-symbols-outlined text-sm">visibility</span>
                         Inspect
                       </button>
@@ -168,30 +204,51 @@ export default function ProofsPage() {
               <div className="space-y-6">
                 <div className="space-y-2">
                   <label className="text-xs font-bold uppercase tracking-widest text-outline">Proof Template</label>
-                  <select className="w-full bg-surface-container-low border border-outline-variant/10 rounded-xl px-4 py-3 text-sm outline-none">
-                    <option>Age Verification {`(`}&gt; 18{`)`}</option>
-                    <option disabled>Identity Anchor Verification</option>
-                    <option disabled>Resident Status Proof</option>
+                  <select 
+                    value={selectedTemplate}
+                    onChange={(e) => setSelectedTemplate(e.target.value)}
+                    className="w-full bg-surface-container-low border border-outline-variant/10 rounded-xl px-4 py-3 text-sm outline-none"
+                  >
+                    <option>Age Verification (&gt; 18)</option>
+                    <option>Document Hash Proof</option>
                   </select>
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-xs font-bold uppercase tracking-widest text-outline">Your Birth Year</label>
-                  <input
-                    type="number"
-                    value={birthYear}
-                    onChange={(e) => setBirthYear(parseInt(e.target.value))}
-                    min="1900"
-                    max="2026"
-                    className="w-full bg-surface-container-low border border-outline-variant/10 rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary outline-none"
-                  />
-                  <p className="text-[10px] text-on-surface-variant italic mt-1">
-                    * This year stays on your device. Only the proof is shared.
-                  </p>
+                  <label className="text-xs font-bold uppercase tracking-widest text-outline">Select Source Document</label>
+                  <select 
+                    value={selectedDocumentId ?? ""}
+                    onChange={(e) => setSelectedDocumentId(e.target.value || null)}
+                    className="w-full bg-surface-container-low border border-outline-variant/10 rounded-xl px-4 py-3 text-sm outline-none"
+                  >
+                    <option value="">Manual Input (No Document)</option>
+                    {documents?.map(doc => (
+                      <option key={doc._id} value={doc._id}>
+                        {doc.docName} ({doc.docType})
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
+                {selectedTemplate === "Age Verification (> 18)" && (
+                  <div className="space-y-2">
+                    <label className="text-xs font-bold uppercase tracking-widest text-outline">Your Birth Year</label>
+                    <input
+                      type="number"
+                      value={birthYear}
+                      onChange={(e) => setBirthYear(parseInt(e.target.value))}
+                      min="1900"
+                      max="2026"
+                      className="w-full bg-surface-container-low border border-outline-variant/10 rounded-xl px-4 py-3 text-sm focus:ring-1 focus:ring-primary outline-none"
+                    />
+                    <p className="text-[10px] text-on-surface-variant italic mt-1">
+                      * This year stays on your device. Only the proof is shared.
+                    </p>
+                  </div>
+                )}
+
                 <button
-                  onClick={handleGenerateAgeProof}
+                  onClick={handleGenerateProof}
                   disabled={isGenerating}
                   className="w-full bg-gradient-to-r from-primary to-primary-dim text-black font-headline font-bold py-4 rounded-xl shadow-lg hover:brightness-110 active:scale-95 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
                 >

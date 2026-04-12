@@ -1,5 +1,9 @@
 {
   "dependencies": {
     "algosdk": "^3.5.2"
+  },
+  "devDependencies": {
+    "postcss": "^8.5.9",
+    "tailwindcss": "^4.2.2"
   }
 }
