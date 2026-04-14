@@ -5,6 +5,8 @@ import { Navbar } from "@/components/Navbar";
 import { useZkWallet } from "@/context/WalletContext";
 import { useDbQuery, useDbMutation } from "@/hooks/useDb";
 import { db } from "@/lib/db";
+import { VaultClient } from "@/contracts/VaultClient";
+import { VAULT_APP_ID } from "@/contracts/config";
 
 const DOC_TYPES = [
   { id: "aadhaar", name: "Aadhaar / National ID", icon: "badge" },
@@ -15,7 +17,7 @@ const DOC_TYPES = [
 ];
 
 export default function DocumentsPage() {
-  const { address, isConnected } = useZkWallet();
+  const { address, isConnected, algorand } = useZkWallet();
   const [selectedType, setSelectedType] = useState(DOC_TYPES[0].id);
   const [docName, setDocName] = useState("");
   const [isUploading, setIsUploading] = useState(false);
@@ -65,6 +67,27 @@ export default function DocumentsPage() {
         // Create a dummy file blob for storage consistency
         fileToUpload = new File([msgBuffer], `${docName}.txt`, { type: "text/plain" });
       }
+
+        // Save to Blockchain (Vault Contract)
+        if (VAULT_APP_ID !== 0) {
+          try {
+            const vaultClient = new VaultClient({
+              appId: BigInt(VAULT_APP_ID),
+              algorand: algorand
+            });
+            
+            await vaultClient.send.addDocument({
+              args: {
+                docType: new TextEncoder().encode(selectedType),
+                docHash: new TextEncoder().encode(hashHex)
+              }
+            });
+            console.log("Anchored to Algorand Vault");
+          } catch (blockchainErr) {
+            console.error("Blockchain anchoring failed:", blockchainErr);
+            // We continue saving to MongoDB even if blockchain fails for UX, or we could stop here
+          }
+        }
 
       // Save metadata to MongoDB API
       await saveDocument({

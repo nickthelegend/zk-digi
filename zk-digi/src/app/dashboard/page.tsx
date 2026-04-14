@@ -1,15 +1,35 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { Navbar } from "@/components/Navbar";
 import { useZkWallet } from "@/context/WalletContext";
 import { useDbQuery } from "@/hooks/useDb";
 import { db } from "@/lib/db";
 import Link from "next/link";
+import { ZkVerifierClient } from "@/contracts/ZkVerifierClient";
+import { VERIFIER_APP_ID } from "@/contracts/config";
 
 export default function Dashboard() {
-  const { address, isConnected } = useZkWallet();
+  const { address, isConnected, algorand } = useZkWallet();
+  const [onChainProofCount, setOnChainProofCount] = useState<number | null>(null);
   const stats = useDbQuery(db.dashboard.getStats, address);
+
+  useEffect(() => {
+    async function fetchOnChainStats() {
+      if (VERIFIER_APP_ID && algorand) {
+        try {
+          const client = new ZkVerifierClient({ appId: BigInt(VERIFIER_APP_ID), algorand });
+          const state = await client.appClient.getGlobalState();
+          if (state.proofCount) {
+             setOnChainProofCount(Number(state.proofCount.asBigInt()));
+          }
+        } catch (e) {
+          console.error("Failed to fetch on-chain stats:", e);
+        }
+      }
+    }
+    fetchOnChainStats();
+  }, [algorand]);
 
   if (!isConnected) {
     return (
@@ -137,10 +157,12 @@ export default function Dashboard() {
               </span>
             </div>
             <div className="space-y-1">
-              <h3 className="font-headline text-5xl font-bold">
-                {isLoading ? "..." : stats.proofCount}
-              </h3>
-              <p className="font-body text-on-surface-variant text-sm font-medium">Generated Proofs</p>
+                <div className="text-4xl font-headline font-bold text-on-surface">
+                  {onChainProofCount !== null ? onChainProofCount : stats ? stats.proofCount : "0"}
+                </div>
+                <div className="text-on-surface-variant font-label text-sm uppercase tracking-wider">
+                  {onChainProofCount !== null ? "On-Chain Verified" : "Active Proofs"}
+                </div>
             </div>
             <div className="mt-6 pt-6 border-t border-outline-variant/10 text-[10px] text-outline tracking-widest uppercase font-bold flex items-center gap-2">
               <span className={`w-1.5 h-1.5 rounded-full ${stats?.verifiedProofs ? "bg-green-500 secure-pulse" : "bg-outline"}`}></span>{" "}

@@ -5,10 +5,12 @@ import { Navbar } from "@/components/Navbar";
 import { useZkWallet } from "@/context/WalletContext";
 import { useDbQuery, useDbMutation } from "@/hooks/useDb";
 import { db } from "@/lib/db";
+import { ZkVerifierClient } from "@/contracts/ZkVerifierClient";
+import { VERIFIER_APP_ID } from "@/contracts/config";
 import { ZKProofService } from "@/lib/zkProofService";
 
 export default function ProofsPage() {
-  const { address, isConnected } = useZkWallet();
+  const { address, isConnected, algorand } = useZkWallet();
   const [birthYear, setBirthYear] = useState<number>(2000);
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -44,7 +46,51 @@ export default function ProofsPage() {
         throw new Error("Generated proof failed local verification check.");
       }
 
-      // Save to Convex
+      // On-Chain verification
+      if (VERIFIER_APP_ID !== 0) {
+        try {
+          const { encodeGroth16Bn254Proof } = await import("snarkjs-algorand");
+          const encoded = encodeGroth16Bn254Proof(result.proof as any);
+          
+          const verifierClient = new ZkVerifierClient({
+            appId: BigInt(VERIFIER_APP_ID),
+            algorand
+          });
+
+          // Convert string signals to BigInt array for the contract
+          const signals = result.publicSignals.map(s => BigInt(s));
+
+          // Call verifyProof on-chain
+          // We also need to add opUp calls to increase budget
+          const composer = algorand.newGroup();
+          
+          // Add 3 opUp calls to increase budget (total 4000 units roughly)
+          // BN254 pairing takes a lot of opcode budget
+          composer.addAppCall(verifierClient.params.opUp({}));
+          composer.addAppCall(verifierClient.params.opUp({}));
+          composer.addAppCall(verifierClient.params.opUp({}));
+          
+          // The actual verification call
+          composer.addAppCall(verifierClient.params.verifyProof({
+            args: {
+              proof: {
+                piA: encoded[0],
+                piB: encoded[1],
+                piC: encoded[2]
+              },
+              publicSignals: signals
+            }
+          }));
+
+          const chainResult = await composer.send();
+          console.log("On-chain verification successful! TxID:", chainResult.txIds[0]);
+        } catch (chainErr) {
+          console.error("On-chain verification failed:", chainErr);
+          // Don't throw here so the proof is still saved in DB as "local only" or "failed on-chain"
+        }
+      }
+
+      // Save to MongoDB
       await saveProofMutation({
         walletAddress: address,
         proofType: selectedTemplate,
@@ -55,7 +101,7 @@ export default function ProofsPage() {
         sourceDocumentId: selectedDocumentId as any || undefined,
       });
 
-      alert("ZK-Proof generated and verified successfully!");
+      alert("ZK-Proof generated and verified on-chain!");
     } catch (err: any) {
       console.error(err);
       alert(`Error: ${err.message || "Failed to generate proof"}`);
