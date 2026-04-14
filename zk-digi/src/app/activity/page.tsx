@@ -9,7 +9,9 @@ import { db } from "@/lib/db";
 const EVENT_ICONS: Record<string, string> = {
   wallet_connected: "account_balance_wallet",
   document_uploaded: "description",
+  document_anchored: "anchor",
   proof_generated: "verified_user",
+  proof_verified: "task_alt",
   consent_granted: "how_to_reg",
   consent_revoked: "block",
 };
@@ -17,7 +19,9 @@ const EVENT_ICONS: Record<string, string> = {
 const EVENT_COLORS: Record<string, string> = {
   wallet_connected: "text-blue-400",
   document_uploaded: "text-green-400",
+  document_anchored: "text-primary-dim",
   proof_generated: "text-primary",
+  proof_verified: "text-green-500",
   consent_granted: "text-tertiary",
   consent_revoked: "text-red-400",
 };

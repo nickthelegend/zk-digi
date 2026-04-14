@@ -46,51 +46,7 @@ export default function ProofsPage() {
         throw new Error("Generated proof failed local verification check.");
       }
 
-      // On-Chain verification
-      if (VERIFIER_APP_ID !== 0) {
-        try {
-          const { encodeGroth16Bn254ProofForAlgo } = await import("@/lib/zkAlgoUtils");
-          const encoded = await encodeGroth16Bn254ProofForAlgo(result.proof);
-          
-          const verifierClient = new ZkVerifierClient({
-            appId: BigInt(VERIFIER_APP_ID),
-            algorand
-          });
-
-          // Convert string signals to BigInt array for the contract
-          const signals = result.publicSignals.map(s => BigInt(s));
-
-          // Call verifyProof on-chain
-          // We also need to add opUp calls to increase budget
-          const composer = algorand.newGroup();
-          
-          // Add 3 opUp calls to increase budget (total 4000 units roughly)
-          // BN254 pairing takes a lot of opcode budget
-          composer.addAppCall(verifierClient.params.opUp({}));
-          composer.addAppCall(verifierClient.params.opUp({}));
-          composer.addAppCall(verifierClient.params.opUp({}));
-          
-          // The actual verification call
-          composer.addAppCall(verifierClient.params.verifyProof({
-            args: {
-              proof: {
-                piA: encoded[0],
-                piB: encoded[1],
-                piC: encoded[2]
-              },
-              publicSignals: signals
-            }
-          }));
-
-          const chainResult = await composer.send();
-          console.log("On-chain verification successful! TxID:", chainResult.txIds[0]);
-        } catch (chainErr) {
-          console.error("On-chain verification failed:", chainErr);
-          // Don't throw here so the proof is still saved in DB as "local only" or "failed on-chain"
-        }
-      }
-
-      // Save to MongoDB
+      // Save to MongoDB (Status: local)
       await saveProofMutation({
         walletAddress: address,
         proofType: selectedTemplate,
@@ -99,12 +55,82 @@ export default function ProofsPage() {
         publicSignals: JSON.stringify(result.publicSignals),
         vkeyHash: result.vkeyHash,
         sourceDocumentId: selectedDocumentId as any || undefined,
+        status: "local"
       });
 
-      alert("ZK-Proof generated and verified on-chain!");
+      await logActivityMutation({
+        walletAddress: address,
+        eventType: "proof_generated",
+        description: `Generated ${selectedTemplate} ZK-proof locally.`,
+      });
+
+      alert("ZK-Proof generated locally! You can now verify it on-chain.");
     } catch (err: any) {
       console.error(err);
       alert(`Error: ${err.message || "Failed to generate proof"}`);
+    } finally {
+      setIsGenerating(false);
+    }
+  };
+
+  const handleVerifyOnChain = async (proofId: string) => {
+    if (!address || !algorand) return;
+    const proof = proofs?.find(p => p._id === proofId);
+    if (!proof) return;
+
+    try {
+      setIsGenerating(true); // Re-use loading state
+      const { encodeGroth16Bn254ProofForAlgo } = await import("@/lib/zkAlgoUtils");
+      const proofObj = JSON.parse(proof.proofJson);
+      const encoded = await encodeGroth16Bn254ProofForAlgo(proofObj);
+      
+      const verifierClient = new ZkVerifierClient({
+        appId: BigInt(VERIFIER_APP_ID),
+        algorand
+      });
+
+      const signals = JSON.parse(proof.publicSignals).map((s: string) => BigInt(s));
+
+      const composer = algorand.newGroup();
+      composer.addAppCall(verifierClient.params.opUp({}));
+      composer.addAppCall(verifierClient.params.opUp({}));
+      composer.addAppCall(verifierClient.params.opUp({}));
+      
+      composer.addAppCall(verifierClient.params.verifyProof({
+        args: {
+          proof: {
+            piA: encoded.piA,
+            piB: encoded.piB,
+            piC: encoded.piC
+          },
+          publicSignals: signals
+        }
+      }));
+
+      const chainResult = await composer.send();
+      const txId = chainResult.txIds[0];
+      console.log("On-chain verification successful! TxID:", txId);
+
+      // Update proof status in DB
+      const updateProofMutation = await fetch("/api/proofs", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: proofId, status: "on-chain", txId })
+      });
+
+      if (!updateProofMutation.ok) throw new Error("Failed to update status");
+
+      await logActivityMutation({
+        walletAddress: address,
+        eventType: "proof_verified",
+        description: `Mathematically verified ${proof.proofType} proof on Algorand Testnet.`,
+        txId: txId
+      });
+
+      alert("Success! Proof verified on Algorand Blockchain.");
+    } catch (err: any) {
+      console.error("On-chain verification failed:", err);
+      alert(`On-chain verification failed: ${err.message || "Unknown error"}`);
     } finally {
       setIsGenerating(false);
     }
@@ -213,13 +239,34 @@ export default function ProofsPage() {
                         {p.vkeyHash ? p.vkeyHash.substring(0, 32) + "..." : p._id.substring(0, 32) + "..."}
                       </code>
                     </div>
-                    <div className="mt-8 flex gap-4">
+                    <div className="mt-8 flex flex-wrap gap-4">
+                      {p.status === "on-chain" ? (
+                        <a 
+                          href={`https://testnet.explorer.perawallet.app/tx/${p.txId}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="flex items-center gap-2 px-6 py-2 rounded-full bg-green-500/10 text-green-400 text-xs font-bold font-headline uppercase tracking-wider border border-green-500/20 hover:bg-green-500/20 transition-all"
+                        >
+                          <span className="material-symbols-outlined text-sm">open_in_new</span>
+                          View on Explorer
+                        </a>
+                      ) : (
+                        <button 
+                          onClick={() => handleVerifyOnChain(p._id)}
+                          disabled={isGenerating}
+                          className="flex items-center gap-2 px-6 py-2 rounded-full bg-primary text-black text-xs font-bold font-headline uppercase tracking-wider hover:brightness-110 transition-all shadow-lg shadow-primary/20"
+                        >
+                          <span className="material-symbols-outlined text-sm">link</span>
+                          Verify on Algorand
+                        </button>
+                      )}
+                      
                       <button 
                         onClick={() => handleShareProof(p._id)}
                         className="flex items-center gap-2 px-6 py-2 rounded-full bg-surface-container-highest text-xs font-bold font-headline uppercase tracking-wider hover:bg-outline-variant/30 transition-all"
                       >
                         <span className="material-symbols-outlined text-sm">share</span>
-                        Share Proof
+                        Share
                       </button>
                       <button 
                         onClick={() => handleInspectProof(p._id)}

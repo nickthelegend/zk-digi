@@ -99,6 +99,12 @@ export default function DocumentsPage() {
         fileSizeBytes: fileToUpload.size,
       });
 
+      await logActivityMutation({
+        walletAddress: address,
+        eventType: "document_anchored",
+        description: `Anchored cryptographic hash of ${docName} (${selectedType}) to vault.`,
+      });
+
       setDocName("");
       setSelectedFile(null);
       const fileInput = document.getElementById("file-input") as HTMLInputElement;

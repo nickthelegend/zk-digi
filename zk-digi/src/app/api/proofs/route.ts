@@ -35,3 +35,19 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
+export async function PATCH(req: NextRequest) {
+  try {
+    await connectToDatabase();
+    const { id, status, txId } = await req.json();
+    
+    const proof = await Proof.findByIdAndUpdate(
+      id,
+      { status, txId, verifiedAt: status === "on-chain" ? Date.now() : undefined },
+      { new: true }
+    );
+
+    return NextResponse.json(proof);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
