@@ -49,8 +49,8 @@ export default function ProofsPage() {
       // On-Chain verification
       if (VERIFIER_APP_ID !== 0) {
         try {
-          const { encodeGroth16Bn254Proof } = await import("snarkjs-algorand");
-          const encoded = encodeGroth16Bn254Proof(result.proof as any);
+          const { encodeGroth16Bn254ProofForAlgo } = await import("@/lib/zkAlgoUtils");
+          const encoded = await encodeGroth16Bn254ProofForAlgo(result.proof);
           
           const verifierClient = new ZkVerifierClient({
             appId: BigInt(VERIFIER_APP_ID),
