@@ -8,6 +8,7 @@ import { db } from "@/lib/db";
 import { ZkVerifierClient } from "@/contracts/ZkVerifierClient";
 import { VERIFIER_APP_ID } from "@/contracts/config";
 import { ZKProofService } from "@/lib/zkProofService";
+import * as algokit from "@algorandfoundation/algokit-utils";
 
 export default function ProofsPage() {
   const { address, isConnected, algorand } = useZkWallet();
@@ -101,11 +102,10 @@ export default function ProofsPage() {
       setIsVerifyingOnChain(true);
 
       const chainResult = await verifierClient.newGroup()
-        .opUp({ sender: address })
-        .opUp({ sender: address })
-        .opUp({ sender: address })
         .verifyProof({
           sender: address,
+          extraFee: algokit.microAlgos(70000),
+          note: `ZK Verification ${Date.now()}`,
           args: {
             proof: {
               piA: encoded.piA,

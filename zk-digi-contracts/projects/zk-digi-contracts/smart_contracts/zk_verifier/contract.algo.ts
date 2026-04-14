@@ -1,4 +1,5 @@
-import { Contract, GlobalState, itxn, TemplateVar, Global, op, Bytes, type bytes, type uint64 } from '@algorandfoundation/algorand-typescript'
+// v1.0.1 - Fixed opUp logic to use applicationCall (appl) for budget pooling
+import { Contract, GlobalState, itxn, TemplateVar, Global, op, Bytes, OnCompleteAction, type bytes, type uint64 } from '@algorandfoundation/algorand-typescript'
 import { abimethod, decodeArc4 } from '@algorandfoundation/algorand-typescript/arc4'
 import { verify, type Groth16Bn254Proof, type Groth16Bn254VerificationKey } from './groth16_bn254.algo'
 import { type PublicSignals } from './bn254_common.algo'
@@ -26,19 +27,25 @@ export class ZkVerifier extends Contract {
   }
 
   /**
-   * Internal helper to increase opcode budget.
-   * We now make this public so the client can call it multiple times in a group
-   * to "pool" a massive budget.
+   * Internal helper to increase opcode budget using inner application calls.
+   * Each ITXN NoOp adds 700 units to the budget pool.
+   */
+  private increaseBudget(iterations: uint64): void {
+    for (let i: uint64 = 0; i < iterations; i++) {
+        itxn.applicationCall({
+            appId: Global.currentApplicationId,
+            onCompletion: OnCompleteAction.NoOp,
+            fee: 0,
+        }).submit()
+    }
+  }
+
+  /**
+   * External method to increase budget for the group.
    */
   @abimethod()
   public opUp(): void {
-    // 15 iterations is the industry standard for stable multi-call pooling
-    for (let i: uint64 = 0; i < 15; i++) {
-        itxn.payment({
-            receiver: Global.currentApplicationAddress,
-            amount: 0
-        }).submit()
-    }
+    this.increaseBudget(15)
   }
 
   /**
@@ -62,11 +69,14 @@ export class ZkVerifier extends Contract {
     proof: Groth16Bn254Proof,
     publicSignals: PublicSignals
   ): boolean {
-    // 1. Check if verification is active
+    // 1. Manually increase budget for THIS transaction (~60 ITXNs = 42k opcodes)
+    // This ensures ec_pairing_check (37.6k) has enough local budget.
+    this.increaseBudget(60)
+
+    // 2. Check if verification is active
     if (this.verificationEnabled.value === 0) return false
 
-    // 2. Perform real verification against BN254 curve
-    // NOTE: Budget must be pooled by calling opUp() multiple times in the group.
+    // 3. Perform real verification against BN254 curve
     const isValid = verify(
         this.getVerificationKey(), 
         publicSignals, 
