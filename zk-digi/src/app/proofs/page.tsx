@@ -104,7 +104,7 @@ export default function ProofsPage() {
       const chainResult = await verifierClient.newGroup()
         .verifyProof({
           sender: address,
-          extraFee: algokit.microAlgos(70000),
+          extraFee: algokit.microAlgos(165000),
           note: `ZK Verification ${Date.now()}`,
           args: {
             proof: {

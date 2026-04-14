@@ -1,4 +1,4 @@
-// v1.0.1 - Fixed opUp logic to use applicationCall (appl) for budget pooling
+// v1.0.3 - Boosted internal budget pooling to 160 iterations for complex MSM
 import { Contract, GlobalState, itxn, TemplateVar, Global, op, Bytes, OnCompleteAction, type bytes, type uint64 } from '@algorandfoundation/algorand-typescript'
 import { abimethod, decodeArc4 } from '@algorandfoundation/algorand-typescript/arc4'
 import { verify, type Groth16Bn254Proof, type Groth16Bn254VerificationKey } from './groth16_bn254.algo'
@@ -69,9 +69,9 @@ export class ZkVerifier extends Contract {
     proof: Groth16Bn254Proof,
     publicSignals: PublicSignals
   ): boolean {
-    // 1. Manually increase budget for THIS transaction (~60 ITXNs = 42k opcodes)
+    // 1. Manually increase budget for THIS transaction (~160 ITXNs = 112k opcodes)
     // This ensures ec_pairing_check (37.6k) has enough local budget.
-    this.increaseBudget(60)
+    this.increaseBudget(160)
 
     // 2. Check if verification is active
     if (this.verificationEnabled.value === 0) return false
