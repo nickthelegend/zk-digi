@@ -19,10 +19,9 @@ interface WalletContextType {
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
-const ALGORAND_NETWORK = process.env.NEXT_PUBLIC_ALGORAND_NETWORK || "localnet";
-const ALGOD_URL = ALGORAND_NETWORK === "localnet" ? "http://localhost:4001" : "https://testnet-api.algonode.cloud";
-const ALGOD_TOKEN = ALGORAND_NETWORK === "localnet" ? "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" : "";
-const ALGOD_PORT = ALGORAND_NETWORK === "localnet" ? 4001 : 443;
+const ALGOD_URL = "https://testnet-api.algonode.cloud";
+const ALGOD_TOKEN = "";
+const ALGOD_PORT = 443;
 
 export function WalletContextProvider({ children }: { children: React.ReactNode }) {
   const { activeAddress, activeWallet, transactionSigner } = useWallet();
@@ -35,10 +34,7 @@ export function WalletContextProvider({ children }: { children: React.ReactNode 
   }, []);
 
   const algorand = useMemo(() => {
-    const client = ALGORAND_NETWORK === "localnet" 
-      ? AlgorandClient.defaultLocalNet() 
-      : AlgorandClient.testNet();
-      
+    const client = AlgorandClient.testNet();
     if (activeAddress) {
       client.setSigner(activeAddress, transactionSigner);
     }
@@ -49,7 +45,7 @@ export function WalletContextProvider({ children }: { children: React.ReactNode 
     if (isConnected && activeAddress) {
       connectWalletMutation({
         address: activeAddress,
-        network: ALGORAND_NETWORK as any,
+        network: "testnet",
       });
       
       logActivityMutation({

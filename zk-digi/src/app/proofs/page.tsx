@@ -409,6 +409,31 @@ export default function ProofsPage() {
         </div>
       )}
 
+      {isVerifyingOnChain && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="glass-card p-12 rounded-[2.5rem] border border-primary/30 max-w-sm w-full text-center space-y-8 animate-in fade-in zoom-in duration-300">
+            <div className="relative">
+              <div className="w-24 h-24 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="material-symbols-outlined text-primary text-3xl animate-pulse">account_balance</span>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <h3 className="font-headline text-3xl font-bold tracking-tight text-on-surface">Algorand Settlement</h3>
+              <p className="text-on-surface-variant text-sm font-light leading-relaxed">
+                Communicating with the blockchain... <br />
+                Verifying ZK-proof constraints on-chain.
+              </p>
+            </div>
+            <div className="flex justify-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce"></div>
+              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]"></div>
+              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]"></div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <style jsx>{`
         .glass-card {
           background: rgba(31, 31, 40, 0.4);
