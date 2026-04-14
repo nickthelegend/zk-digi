@@ -3,8 +3,8 @@
 import React, { useState } from "react";
 import { Navbar } from "@/components/Navbar";
 import { useZkWallet } from "@/context/WalletContext";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../../convex/_generated/api";
+import { useDbQuery, useDbMutation } from "@/hooks/useDb";
+import { db } from "@/lib/db";
 import { ZKProofService } from "@/lib/zkProofService";
 
 export default function ProofsPage() {
@@ -12,14 +12,10 @@ export default function ProofsPage() {
   const [birthYear, setBirthYear] = useState<number>(2000);
   const [isGenerating, setIsGenerating] = useState(false);
 
-  const proofs = useQuery(api.proofs.getProofs, 
-    address ? { walletAddress: address } : "skip"
-  );
-  const documents = useQuery(api.documents.getDocuments,
-    address ? { walletAddress: address } : "skip"
-  );
-  const saveProofMutation = useMutation(api.proofs.saveProof);
-  const logActivityMutation = useMutation(api.activity.logActivity);
+  const proofs = useDbQuery(db.proofs.list, address);
+  const documents = useDbQuery(db.documents.list, address);
+  const saveProofMutation = useDbMutation(db.proofs.save);
+  const logActivityMutation = useDbMutation(db.activity.log);
 
   const [selectedTemplate, setSelectedTemplate] = useState("Age Verification (> 18)");
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);

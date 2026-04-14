@@ -3,8 +3,8 @@
 import React, { useState } from "react";
 import { Navbar } from "@/components/Navbar";
 import { useZkWallet } from "@/context/WalletContext";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../../convex/_generated/api";
+import { useDbQuery, useDbMutation } from "@/hooks/useDb";
+import { db } from "@/lib/db";
 
 const DOC_TYPES = [
   { id: "aadhaar", name: "Aadhaar / National ID", icon: "badge" },
@@ -20,12 +20,9 @@ export default function DocumentsPage() {
   const [docName, setDocName] = useState("");
   const [isUploading, setIsUploading] = useState(false);
 
-  const documents = useQuery(api.documents.getDocuments, 
-    address ? { walletAddress: address } : "skip"
-  );
-  const generateUploadUrl = useMutation(api.documents.generateUploadUrl);
-  const saveDocument = useMutation(api.documents.saveDocument);
-  const logActivityMutation = useMutation(api.activity.logActivity);
+  const documents = useDbQuery(db.documents.list, address);
+  const saveDocument = useDbMutation(db.documents.save);
+  const logActivityMutation = useDbMutation(db.activity.log);
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
 
@@ -69,26 +66,12 @@ export default function DocumentsPage() {
         fileToUpload = new File([msgBuffer], `${docName}.txt`, { type: "text/plain" });
       }
 
-      // 1. Get upload URL from Convex
-      const uploadUrl = await generateUploadUrl();
-
-      // 2. POST file to Convex storage
-      const result = await fetch(uploadUrl, {
-        method: "POST",
-        headers: { "Content-Type": fileToUpload.type },
-        body: fileToUpload,
-      });
-      
-      if (!result.ok) throw new Error("Failed to upload to storage");
-      const { storageId } = await result.json();
-
-      // 3. Save metadata to Convex DB
+      // Save metadata to MongoDB API
       await saveDocument({
         walletAddress: address,
         docType: selectedType,
         docName: docName,
         docHash: hashHex,
-        storageId,
         fileType: fileToUpload.type,
         fileSizeBytes: fileToUpload.size,
       });

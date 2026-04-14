@@ -3,15 +3,13 @@
 import React from "react";
 import { Navbar } from "@/components/Navbar";
 import { useZkWallet } from "@/context/WalletContext";
-import { useQuery } from "convex/react";
-import { api } from "../../../convex/_generated/api";
+import { useDbQuery } from "@/hooks/useDb";
+import { db } from "@/lib/db";
 import Link from "next/link";
 
 export default function Dashboard() {
   const { address, isConnected } = useZkWallet();
-  const stats = useQuery(api.dashboard.getDashboardStats, 
-    address ? { walletAddress: address } : "skip"
-  );
+  const stats = useDbQuery(db.dashboard.getStats, address);
 
   if (!isConnected) {
     return (

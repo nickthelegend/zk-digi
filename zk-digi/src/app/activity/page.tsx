@@ -3,8 +3,8 @@
 import React from "react";
 import { Navbar } from "@/components/Navbar";
 import { useZkWallet } from "@/context/WalletContext";
-import { useQuery } from "convex/react";
-import { api } from "../../../convex/_generated/api";
+import { useDbQuery } from "@/hooks/useDb";
+import { db } from "@/lib/db";
 
 const EVENT_ICONS: Record<string, string> = {
   wallet_connected: "account_balance_wallet",
@@ -24,9 +24,7 @@ const EVENT_COLORS: Record<string, string> = {
 
 export default function ActivityPage() {
   const { address, isConnected } = useZkWallet();
-  const activity = useQuery(api.activity.getActivity, 
-    address ? { walletAddress: address } : "skip"
-  );
+  const activity = useDbQuery(db.activity.list, address);
 
   if (!isConnected) {
     return (

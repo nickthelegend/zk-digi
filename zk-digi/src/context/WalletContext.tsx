@@ -2,8 +2,8 @@
 
 import React, { createContext, useContext, useEffect, useMemo } from "react";
 import { useWallet } from "@txnlab/use-wallet-react";
-import { useMutation } from "convex/react";
-import { api } from "../../convex/_generated/api";
+import { useDbMutation } from "@/hooks/useDb";
+import { db } from "@/lib/db";
 import algosdk from "algosdk";
 
 interface WalletContextType {
@@ -22,8 +22,8 @@ const ALGOD_PORT = 443;
 export function WalletContextProvider({ children }: { children: React.ReactNode }) {
   const { activeAddress, activeWallet } = useWallet();
   const isConnected = !!activeAddress;
-  const connectWalletMutation = useMutation(api.wallets.connectWallet);
-  const logActivityMutation = useMutation(api.activity.logActivity);
+  const connectWalletMutation = useDbMutation(db.wallets.connect);
+  const logActivityMutation = useDbMutation(db.activity.log);
 
   const algodClient = useMemo(() => {
     return new algosdk.Algodv2(ALGOD_TOKEN, ALGOD_URL, ALGOD_PORT);

@@ -3,21 +3,19 @@
 import React from "react";
 import { Navbar } from "@/components/Navbar";
 import { useZkWallet } from "@/context/WalletContext";
-import { useQuery, useMutation } from "convex/react";
-import { api } from "../../../convex/_generated/api";
+import { useDbQuery, useDbMutation } from "@/hooks/useDb";
+import { db } from "@/lib/db";
 
 export default function ConsentsPage() {
   const { address, isConnected } = useZkWallet();
-  const consents = useQuery(api.consents.getConsents, 
-    address ? { walletAddress: address } : "skip"
-  );
-  const revokeMutation = useMutation(api.consents.revokeConsent);
-  const logActivityMutation = useMutation(api.activity.logActivity);
+  const consents = useDbQuery(db.consents.list, address);
+  const revokeMutation = useDbMutation(db.consents.revoke);
+  const logActivityMutation = useDbMutation(db.activity.log);
 
   const handleRevoke = async (consentId: any, appName: string) => {
     if (!address) return;
     try {
-      await revokeMutation({ id: consentId });
+      await revokeMutation(consentId);
       await logActivityMutation({
         walletAddress: address,
         eventType: "consent_revoked",
