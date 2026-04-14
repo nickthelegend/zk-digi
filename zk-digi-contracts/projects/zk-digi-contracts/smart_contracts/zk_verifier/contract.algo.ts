@@ -15,15 +15,17 @@ export class ZkVerifier extends Contract {
   public verificationEnabled = GlobalState<uint64>({ key: 'v' })    // 1 = enabled
   public proofCount = GlobalState<uint64>({ key: 'c' })            // total proofs verified
   public circuitType = GlobalState<bytes>({ key: 't' })           // metadata: e.g. "multiplier"
+  public budgetAppId = GlobalState<uint64>({ key: 'b' })          // ID of the dummy app for budget pooling
   
   /**
    * Initialize the verifier
    */
   @abimethod()
-  public initialize(circuit: bytes): void {
+  public initialize(circuit: bytes, budgetAppId: uint64): void {
     this.verificationEnabled.value = 1
     this.proofCount.value = 0
     this.circuitType.value = circuit
+    this.budgetAppId.value = budgetAppId
   }
 
   /**
@@ -33,7 +35,7 @@ export class ZkVerifier extends Contract {
   private increaseBudget(iterations: uint64): void {
     for (let i: uint64 = 0; i < iterations; i++) {
         itxn.applicationCall({
-            appId: Global.currentApplicationId,
+            appId: this.budgetAppId.value,
             onCompletion: OnCompleteAction.NoOp,
             fee: 0,
         }).submit()
