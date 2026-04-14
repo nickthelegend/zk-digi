@@ -19,12 +19,35 @@ export async function GET(req: NextRequest) {
   }
 }
 
+export async function POST(req: NextRequest) {
+  try {
+    await connectToDatabase();
+    const body = await req.json();
+    const { walletAddress, appName, appId, proofId, proofTypes } = body;
+
+    const newConsent = await Consent.create({
+      walletAddress,
+      appName,
+      appId,
+      proofId,
+      proofTypes,
+      grantedAt: Date.now(),
+      lastUpdated: Date.now(),
+      status: "active",
+    });
+
+    return NextResponse.json(newConsent);
+  } catch (error: any) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+}
+
 export async function PATCH(req: NextRequest) {
    // Simplified revoke
    try {
     await connectToDatabase();
     const { id } = await req.json();
-    const consent = await Consent.findByIdAndUpdate(id, { status: "revoked" }, { new: true });
+    const consent = await Consent.findByIdAndUpdate(id, { status: "revoked", lastUpdated: Date.now() }, { new: true });
     return NextResponse.json(consent);
   } catch (error: any) {
     return NextResponse.json({ error: error.message }, { status: 500 });

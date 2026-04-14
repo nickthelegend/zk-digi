@@ -5,12 +5,20 @@ import { Navbar } from "@/components/Navbar";
 import { useZkWallet } from "@/context/WalletContext";
 import { useDbQuery, useDbMutation } from "@/hooks/useDb";
 import { db } from "@/lib/db";
+import { useState } from "react";
 
 export default function ConsentsPage() {
   const { address, isConnected } = useZkWallet();
   const consents = useDbQuery(db.consents.list, address);
+  const proofs = useDbQuery(db.proofs.list, address);
   const revokeMutation = useDbMutation(db.consents.revoke);
+  const grantMutation = useDbMutation(db.consents.grant);
   const logActivityMutation = useDbMutation(db.activity.log);
+
+  const [isGranting, setIsGranting] = useState(false);
+  const [selectedProofId, setSelectedProofId] = useState("");
+  const [targetApp, setTargetApp] = useState("");
+  const [purpose, setPurpose] = useState("");
 
   const handleRevoke = async (consentId: any, appName: string) => {
     if (!address) return;
@@ -25,6 +33,45 @@ export default function ConsentsPage() {
     } catch (err) {
       console.error(err);
       alert("Failed to revoke consent.");
+    }
+  };
+
+  const handleGrant = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!address || !selectedProofId || !targetApp) {
+      alert("Please fill all fields.");
+      return;
+    }
+
+    const proof = proofs?.find((p: any) => p._id === selectedProofId);
+    if (!proof) return;
+
+    try {
+      setIsGranting(true);
+      await grantMutation({
+        walletAddress: address,
+        appName: targetApp,
+        appId: targetApp.toLowerCase().replace(/\s+/g, '-'),
+        proofId: selectedProofId,
+        proofTypes: [proof.proofType],
+        purpose: purpose,
+      });
+
+      await logActivityMutation({
+        walletAddress: address,
+        eventType: "consent_granted",
+        description: `Granted privacy consent to ${targetApp}`,
+      });
+
+      alert(`Consent granted to ${targetApp} successfully!`);
+      setTargetApp("");
+      setSelectedProofId("");
+      setPurpose("");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to grant consent.");
+    } finally {
+      setIsGranting(false);
     }
   };
 
@@ -73,6 +120,44 @@ export default function ConsentsPage() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
           {/* Sidebar Stats */}
           <aside className="lg:col-span-3 space-y-6">
+            <div className="p-8 rounded-[2rem] bg-primary/10 border border-primary/20 flex flex-col gap-4">
+              <span className="text-[10px] font-label uppercase tracking-widest text-primary font-bold">
+                Identity Sharing
+              </span>
+              <h3 className="text-xl font-headline font-bold text-white">Grant New Access</h3>
+              <form onSubmit={handleGrant} className="space-y-4">
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-outline">Third Party App</label>
+                  <input 
+                    type="text" 
+                    value={targetApp}
+                    onChange={(e) => setTargetApp(e.target.value)}
+                    placeholder="e.g. HDFC Bank"
+                    className="w-full bg-surface-container-highest border border-outline-variant/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] uppercase font-bold text-outline">Select ZK-Proof</label>
+                  <select 
+                    value={selectedProofId}
+                    onChange={(e) => setSelectedProofId(e.target.value)}
+                    className="w-full bg-surface-container-highest border border-outline-variant/10 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-primary/50"
+                  >
+                    <option value="">-- Choose Proof --</option>
+                    {proofs?.map((p: any) => (
+                      <option key={p._id} value={p._id}>{p.proofType} ({new Date(p.generatedAt).toLocaleDateString()})</option>
+                    ))}
+                  </select>
+                </div>
+                <button 
+                  disabled={isGranting}
+                  className="w-full py-4 rounded-2xl bg-primary text-on-primary font-bold text-xs uppercase tracking-widest hover:brightness-110 transition-all disabled:opacity-50"
+                >
+                  {isGranting ? "Authorizing..." : "Authorize Grant"}
+                </button>
+              </form>
+            </div>
+
             <div className="p-8 rounded-[2rem] bg-surface-container-low border border-outline-variant/5 flex flex-col gap-2">
               <span className="text-[10px] font-label uppercase tracking-widest text-on-surface-variant font-bold">
                 Active Consents
@@ -118,7 +203,7 @@ export default function ConsentsPage() {
                           {consent.appName}
                         </h3>
                         <div className="flex flex-wrap gap-3 items-center mb-5">
-                          {consent.requestedData.map((data: string) => (
+                          {consent.proofTypes?.map((data: string) => (
                             <span key={data} className="px-3 py-1 bg-primary/5 text-primary text-[10px] font-label uppercase tracking-widest rounded-lg border border-primary/20 font-bold">
                               {data.split('_').join(' ')}
                             </span>

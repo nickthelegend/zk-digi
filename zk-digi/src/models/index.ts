@@ -74,6 +74,7 @@ export interface IConsent extends Document {
   walletAddress: string;
   appName: string;
   appId: string;
+  proofId?: string;
   proofTypes: string[];
   grantedAt: number;
   expiresAt?: number;
@@ -84,6 +85,7 @@ const ConsentSchema = new Schema<IConsent>({
   walletAddress: { type: String, required: true, index: true },
   appName: { type: String, required: true },
   appId: { type: String, required: true },
+  proofId: { type: Schema.Types.ObjectId, ref: 'Proof' },
   proofTypes: [{ type: String }],
   grantedAt: { type: Number, required: true },
   expiresAt: { type: Number },
