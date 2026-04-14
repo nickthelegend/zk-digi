@@ -7,15 +7,13 @@ import path from 'path'
 const DEPLOYER_MNEMONIC = "tone bounce fish brass pizza supply mercy mango guard fresh furnace fold smooth tool illegal winter math target laptop tortoise castle seminar marble absent announce"
 
 export async function deploy() {
-  console.log('=== Deploying Real ZK Verifier to TestNet ===')
+  console.log('=== Deploying Real ZK Verifier ===')
 
-  const algorand = AlgorandClient.testNet()
+  const algorand = AlgorandClient.fromEnvironment()
   
-  const account = algosdk.mnemonicToSecretKey(DEPLOYER_MNEMONIC)
-  algorand.setSigner(account.addr, algosdk.makeBasicAccountTransactionSigner(account))
-  const deployer = account.addr
-  
-  console.log('Deployer address:', deployer)
+  // Use the default sender (e.g. from DEPLOYER_MNEMONIC in .env)
+  const deployer = await algorand.account.deployer()
+  console.log('Deployer address:', deployer.addr)
 
   // Load encoded verification key
   const vkBase64 = fs.readFileSync(path.join(process.cwd(), 'vk_encoded.txt'), 'utf8').trim()

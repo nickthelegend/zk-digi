@@ -21,7 +21,8 @@ export default function Dashboard() {
           const client = new ZkVerifierClient({ appId: BigInt(VERIFIER_APP_ID), algorand });
           const state = await client.appClient.getGlobalState();
           if (state.proofCount) {
-             setOnChainProofCount(Number(state.proofCount.asBigInt()));
+             const val = state.proofCount as any;
+             setOnChainProofCount(Number(typeof val === 'bigint' ? val : val.asBigInt?.() ?? val.value));
           }
         } catch (e) {
           console.error("Failed to fetch on-chain stats:", e);

@@ -21,6 +21,7 @@ export default function ProofsPage() {
 
   const [selectedTemplate, setSelectedTemplate] = useState("Age Verification (> 18)");
   const [selectedDocumentId, setSelectedDocumentId] = useState<string | null>(null);
+  const [isVerifyingOnChain, setIsVerifyingOnChain] = useState(false);
 
   const handleGenerateProof = async () => {
     if (!address) return;
@@ -34,7 +35,7 @@ export default function ProofsPage() {
       }
 
       if (selectedDocumentId) {
-        const doc = documents?.find(d => d._id === selectedDocumentId);
+        const doc = documents?.find((d: any) => d._id === selectedDocumentId);
         if (doc) userInput.docHash = doc.docHash;
       }
 
@@ -75,7 +76,7 @@ export default function ProofsPage() {
 
   const handleVerifyOnChain = async (proofId: string) => {
     if (!address || !algorand) return;
-    const proof = proofs?.find(p => p._id === proofId);
+    const proof = proofs?.find((p: any) => p._id === proofId);
     if (!proof) return;
 
     try {
@@ -84,6 +85,12 @@ export default function ProofsPage() {
       const proofObj = JSON.parse(proof.proofJson);
       const encoded = await encodeGroth16Bn254ProofForAlgo(proofObj);
       
+      console.log("Encoded proof for AVM:", {
+        piA: { type: encoded.piA.constructor.name, length: encoded.piA.length },
+        piB: { type: encoded.piB.constructor.name, length: encoded.piB.length },
+        piC: { type: encoded.piC.constructor.name, length: encoded.piC.length }
+      });
+      
       const verifierClient = new ZkVerifierClient({
         appId: BigInt(VERIFIER_APP_ID),
         algorand
@@ -91,23 +98,24 @@ export default function ProofsPage() {
 
       const signals = JSON.parse(proof.publicSignals).map((s: string) => BigInt(s));
 
-      const composer = algorand.newGroup();
-      composer.addAppCall(verifierClient.params.opUp({}));
-      composer.addAppCall(verifierClient.params.opUp({}));
-      composer.addAppCall(verifierClient.params.opUp({}));
-      
-      composer.addAppCall(verifierClient.params.verifyProof({
-        args: {
-          proof: {
-            piA: encoded.piA,
-            piB: encoded.piB,
-            piC: encoded.piC
-          },
-          publicSignals: signals
-        }
-      }));
+      setIsVerifyingOnChain(true);
 
-      const chainResult = await composer.send();
+      const chainResult = await verifierClient.newGroup()
+        .opUp({ sender: address })
+        .opUp({ sender: address })
+        .opUp({ sender: address })
+        .verifyProof({
+          sender: address,
+          args: {
+            proof: {
+              piA: encoded.piA,
+              piB: encoded.piB,
+              piC: encoded.piC
+            },
+            publicSignals: signals
+          }
+        })
+        .send();
       const txId = chainResult.txIds[0];
       console.log("On-chain verification successful! TxID:", txId);
 
@@ -130,21 +138,26 @@ export default function ProofsPage() {
       alert("Success! Proof verified on Algorand Blockchain.");
     } catch (err: any) {
       console.error("On-chain verification failed:", err);
-      alert(`On-chain verification failed: ${err.message || "Unknown error"}`);
+      // Give more specific error message if it looks like a selector mismatch
+      const errorMessage = err.message?.includes("err opcode executed") 
+        ? "Verification failed (Selector Mismatch). Please check if your VERIFIER_APP_ID is correct and points to the right contract version."
+        : `On-chain verification failed: ${err.message || "Unknown error"}`;
+      alert(errorMessage);
     } finally {
+      setIsVerifyingOnChain(false);
       setIsGenerating(false);
     }
   };
 
   const handleShareProof = async (proofId: string) => {
-    const proof = proofs?.find(p => p._id === proofId);
+    const proof = proofs?.find((p: any) => p._id === proofId);
     if (!proof) return;
     await navigator.clipboard.writeText(proof.proofJson);
     alert("Proof JSON copied to clipboard!");
   };
 
   const handleInspectProof = (proofId: string) => {
-    const proof = proofs?.find(p => p._id === proofId);
+    const proof = proofs?.find((p: any) => p._id === proofId);
     if (!proof) return;
     console.log("Proof details:", {
       type: proof.proofType,
@@ -311,7 +324,7 @@ export default function ProofsPage() {
                     className="w-full bg-surface-container-low border border-outline-variant/10 rounded-xl px-4 py-3 text-sm outline-none"
                   >
                     <option value="">Manual Input (No Document)</option>
-                    {documents?.map(doc => (
+                    {documents?.map((doc: any) => (
                       <option key={doc._id} value={doc._id}>
                         {doc.docName} ({doc.docType})
                       </option>
@@ -370,6 +383,31 @@ export default function ProofsPage() {
           </aside>
         </div>
       </main>
+
+      {isVerifyingOnChain && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="glass-card p-12 rounded-[2.5rem] border border-primary/30 max-w-sm w-full text-center space-y-8 animate-in fade-in zoom-in duration-300">
+            <div className="relative">
+              <div className="w-24 h-24 border-4 border-primary/20 border-t-primary rounded-full animate-spin mx-auto"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <span className="material-symbols-outlined text-primary text-3xl animate-pulse">account_balance</span>
+              </div>
+            </div>
+            <div className="space-y-3">
+              <h3 className="font-headline text-3xl font-bold tracking-tight text-on-surface">Algorand Settlement</h3>
+              <p className="text-on-surface-variant text-sm font-light leading-relaxed">
+                Communicating with the blockchain... <br />
+                Verifying ZK-proof constraints on-chain.
+              </p>
+            </div>
+            <div className="flex justify-center gap-1.5">
+              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce"></div>
+              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.15s]"></div>
+              <div className="w-1.5 h-1.5 rounded-full bg-primary animate-bounce [animation-delay:-0.3s]"></div>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style jsx>{`
         .glass-card {
