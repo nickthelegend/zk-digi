@@ -8,7 +8,7 @@ import { db } from "@/lib/db";
 import { useState } from "react";
 import * as algokit from "@algorandfoundation/algokit-utils";
 import * as algosdk from "algosdk";
-import { ZkConsentClient } from "@/contracts/ZkConsentClient";
+import { ZkConsentFactory } from "@/contracts/ZkConsentClient";
 
 export default function ConsentsPage() {
   const { address, isConnected, algorand } = useZkWallet();
@@ -19,6 +19,10 @@ export default function ConsentsPage() {
   const logActivityMutation = useDbMutation(db.activity.log);
 
   const [isGranting, setIsGranting] = useState(false);
+  const [deploymentStage, setDeploymentStage] = useState<"idle" | "deploying" | "initializing" | "saving">("idle");
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [createdAppId, setCreatedAppId] = useState<string | null>(null);
+
   const [selectedProofId, setSelectedProofId] = useState("");
   const [targetApp, setTargetApp] = useState("");
   const [purpose, setPurpose] = useState("");
@@ -51,31 +55,21 @@ export default function ConsentsPage() {
 
     try {
       setIsGranting(true);
+      setDeploymentStage("deploying");
 
       // Deploy real ZkConsent smart contract using USER'S connected wallet
       if (!address || !algorand) throw new Error("Wallet not fully connected");
 
-      const appClient = new ZkConsentClient({
-        resolveBy: "id",
-        id: 0,
-        sender: address,
-        algorand
+      const factory = algorand.client.getTypedAppFactory(ZkConsentFactory, {
+        defaultSender: address
       });
 
-      // 1. Create the App
-      await appClient.create.bare();
-
-      // 2. Initialize with consent configuration
-      await appClient.send.initialize({
-        args: {
-            owner: algosdk.decodeAddress(address).publicKey,
-            appName: new Uint8Array(Buffer.from(targetApp)),
-            proofType: new Uint8Array(Buffer.from(proof.proofType))
-        }
-      });
+      // 1. Create a brand new App for this specific consent
+      const createResult = await factory.send.create.bare();
+      const appClient = createResult.appClient;
+      const onChainAppId = appClient.appId.toString();
       
-      const onChainAppId = (await appClient.appClient.getAppReference()).appId.toString();
-
+      setDeploymentStage("saving");
       await grantMutation({
         walletAddress: address,
         appName: targetApp,
@@ -91,15 +85,18 @@ export default function ConsentsPage() {
         description: `Granted privacy consent to ${targetApp} (App ID: ${onChainAppId})`,
       });
 
-      alert(`Consent granted to ${targetApp} successfully!`);
+      setCreatedAppId(onChainAppId);
+      setShowSuccessModal(true);
+
       setTargetApp("");
       setSelectedProofId("");
       setPurpose("");
     } catch (err) {
       console.error(err);
-      alert("Failed to grant consent.");
+      alert("Failed to grant consent. Please ensure you approve all wallet transactions.");
     } finally {
       setIsGranting(false);
+      setDeploymentStage("idle");
     }
   };
 
@@ -140,15 +137,16 @@ export default function ConsentsPage() {
           <div className="flex items-center gap-4">
              <div className="px-6 py-3 rounded-2xl bg-surface-container-low border border-outline-variant/10 flex items-center gap-3">
                 <span className="w-2.5 h-2.5 rounded-full bg-primary secure-pulse"></span>
-                <span className="text-xs font-label uppercase tracking-widest font-bold">Privacy Layer: Shielded</span>
+                <span className="text-[10px] font-label uppercase tracking-widest text-primary font-bold">Encrypted Tunnel Active</span>
              </div>
           </div>
         </header>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-12">
-          {/* Sidebar Stats */}
-          <aside className="lg:col-span-3 space-y-6">
-            <div className="p-8 rounded-[2rem] bg-primary/10 border border-primary/20 flex flex-col gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <aside className="lg:col-span-1 space-y-8">
+            <div className="p-10 rounded-[2.5rem] bg-surface-container-low border border-outline-variant/10 shadow-2xl relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-64 h-64 bg-primary/5 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 group-hover:bg-primary/10 transition-colors"></div>
+              
               <span className="text-[10px] font-label uppercase tracking-widest text-primary font-bold">
                 Identity Sharing
               </span>
@@ -181,7 +179,7 @@ export default function ConsentsPage() {
                   disabled={isGranting}
                   className="w-full py-4 rounded-2xl bg-primary text-on-primary font-bold text-xs uppercase tracking-widest hover:brightness-110 transition-all disabled:opacity-50"
                 >
-                  {isGranting ? "Authorizing..." : "Authorize Grant"}
+                  {isGranting ? (deploymentStage === "deploying" ? "Deploying App..." : "Saving Data...") : "Authorize Grant"}
                 </button>
               </form>
             </div>
@@ -205,7 +203,7 @@ export default function ConsentsPage() {
           </aside>
 
           {/* Main Consents List */}
-          <section className="lg:col-span-9 space-y-6">
+          <section className="lg:col-span-2 space-y-6">
              <h2 className="font-headline text-2xl font-bold border-b border-outline-variant/10 pb-4">
                Connected Applications
              </h2>
@@ -334,6 +332,30 @@ export default function ConsentsPage() {
           50% { opacity: 1; transform: scale(1.2); }
         }
       `}</style>
+      
+      {showSuccessModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm px-4">
+          <div className="bg-surface-container-low p-8 rounded-[2rem] border border-outline-variant/10 shadow-2xl max-w-sm w-full text-center">
+            <div className="w-16 h-16 rounded-full bg-green-500/10 text-green-400 flex items-center justify-center mx-auto mb-6">
+              <span className="material-symbols-outlined text-4xl">check_circle</span>
+            </div>
+            <h2 className="text-2xl font-bold font-headline mb-2 text-white">Consent Created!</h2>
+            <p className="text-on-surface-variant mb-6 text-sm">
+              Your smart contract was successfully deployed and initialized on the Algorand testnet.
+            </p>
+            <div className="bg-background/50 rounded-xl p-4 mb-8 border border-outline-variant/5">
+                <p className="text-[10px] text-outline uppercase tracking-widest font-bold mb-2">Contract App ID</p>
+                <p className="font-mono text-primary text-2xl font-bold break-all">{createdAppId}</p>
+            </div>
+            <button
+               onClick={() => setShowSuccessModal(false)}
+               className="w-full py-4 rounded-2xl bg-primary text-black font-bold tracking-widest uppercase hover:brightness-110 transition-all"
+            >
+              Continue
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
