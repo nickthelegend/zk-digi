@@ -6,9 +6,12 @@ import { useZkWallet } from "@/context/WalletContext";
 import { useDbQuery, useDbMutation } from "@/hooks/useDb";
 import { db } from "@/lib/db";
 import { useState } from "react";
+import * as algokit from "@algorandfoundation/algokit-utils";
+import * as algosdk from "algosdk";
+import { ZkConsentClient } from "@/contracts/ZkConsentClient";
 
 export default function ConsentsPage() {
-  const { address, isConnected } = useZkWallet();
+  const { address, isConnected, algorand } = useZkWallet();
   const consents = useDbQuery(db.consents.list, address);
   const proofs = useDbQuery(db.proofs.list, address);
   const revokeMutation = useDbMutation(db.consents.revoke);
@@ -48,10 +51,35 @@ export default function ConsentsPage() {
 
     try {
       setIsGranting(true);
+
+      // Deploy real ZkConsent smart contract using USER'S connected wallet
+      if (!address || !algorand) throw new Error("Wallet not fully connected");
+
+      const appClient = new ZkConsentClient({
+        resolveBy: "id",
+        id: 0,
+        sender: address,
+        algorand
+      });
+
+      // 1. Create the App
+      await appClient.create.bare();
+
+      // 2. Initialize with consent configuration
+      await appClient.send.initialize({
+        args: {
+            owner: algosdk.decodeAddress(address).publicKey,
+            appName: new Uint8Array(Buffer.from(targetApp)),
+            proofType: new Uint8Array(Buffer.from(proof.proofType))
+        }
+      });
+      
+      const onChainAppId = (await appClient.appClient.getAppReference()).appId.toString();
+
       await grantMutation({
         walletAddress: address,
         appName: targetApp,
-        appId: targetApp.toLowerCase().replace(/\s+/g, '-'),
+        appId: onChainAppId,
         proofId: selectedProofId,
         proofTypes: [proof.proofType],
         purpose: purpose,
@@ -60,7 +88,7 @@ export default function ConsentsPage() {
       await logActivityMutation({
         walletAddress: address,
         eventType: "consent_granted",
-        description: `Granted privacy consent to ${targetApp}`,
+        description: `Granted privacy consent to ${targetApp} (App ID: ${onChainAppId})`,
       });
 
       alert(`Consent granted to ${targetApp} successfully!`);
@@ -223,12 +251,22 @@ export default function ConsentsPage() {
                     </div>
                     <div className="flex md:flex-col justify-end gap-3 min-w-[150px]">
                       {consent.status === 'active' ? (
-                        <button 
-                          onClick={() => handleRevoke(consent._id, consent.appName)}
-                          className="w-full px-6 py-3 rounded-xl bg-red-500/10 text-red-400 text-[10px] font-bold tracking-widest uppercase hover:bg-red-500/20 border border-red-500/20 transition-all"
-                        >
-                          Revoke Access
-                        </button>
+                        <>
+                          <a 
+                            href={`/share/consent/${consent.appId}`}
+                            target="_blank"
+                            className="w-full px-6 py-3 rounded-xl bg-primary/10 text-primary text-[10px] text-center font-bold tracking-widest uppercase hover:bg-primary/20 border border-primary/20 transition-all flex items-center justify-center gap-2"
+                          >
+                            <span className="material-symbols-outlined text-sm">share</span>
+                            Share Link
+                          </a>
+                          <button 
+                            onClick={() => handleRevoke(consent._id, consent.appName)}
+                            className="w-full px-6 py-3 rounded-xl bg-red-500/10 text-red-400 text-[10px] font-bold tracking-widest uppercase hover:bg-red-500/20 border border-red-500/20 transition-all"
+                          >
+                            Revoke Access
+                          </button>
+                        </>
                       ) : (
                          <span className="text-center text-[10px] uppercase font-bold tracking-widest text-outline bg-surface-container-highest py-2 rounded-lg border border-outline-variant/10">
                            {consent.status}
